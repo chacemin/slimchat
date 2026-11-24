@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { pickAttachment } from "../worker/src/utils.js";
+import { pickAttachment } from "../server/src/utils.js";
 import {
 	fallbackVoiceWaveform,
 	formatVoiceDuration,

@@ -14,7 +14,6 @@ import MessageList from '../components/chat/MessageList.vue';
 import MessageComposer from '../components/chat/MessageComposer.vue';
 import MessageContextMenu from '../components/chat/MessageContextMenu.vue';
 import PinnedMessageBar from '../components/chat/PinnedMessageBar.vue';
-import RoomBridgeNotice from '../components/chat/RoomBridgeNotice.vue';
 import PublicGroupDiscovery from '../components/chat/PublicGroupDiscovery.vue';
 import UiAvatar from '../components/ui/Avatar.vue';
 import LanguageSwitch from '../components/ui/LanguageSwitch.vue';
@@ -632,19 +631,8 @@ watch(
           >
             <Menu :size="22" aria-hidden="true" />
           </button>
-          <h1 class="brand-title">EdgeChat</h1>
+          <h1 class="brand-title">SlimChat</h1>
           <div class="sidebar-header-actions">
-            <a
-              class="header-action header-action--github"
-              href="https://github.com/aozorae/Edgechat"
-              target="_blank"
-              rel="noopener noreferrer"
-              :title="t('nav.githubRepository')"
-              :aria-label="t('nav.openGithubRepository')"
-            >
-              <img src="/github.svg" alt="" width="20" height="20" />
-              <span class="sr-only">{{ t('nav.openGithubRepository') }}</span>
-            </a>
             <button
               type="button"
               class="header-action header-action--primary"
@@ -792,7 +780,6 @@ watch(
           </div>
         </header>
 
-        <RoomBridgeNotice v-if="activeRoom.kind !== 'dm'" :room-id="Number(activeRoom.id)" />
         <PinnedMessageBar
           v-if="pinnedMessage && activeRoom.kind !== 'dm'"
           :message="pinnedMessage"
@@ -865,7 +852,7 @@ watch(
         <div class="empty-content">
           <div class="empty-brand">
             <MessageCircle :size="36" :stroke-width="1.5" aria-hidden="true" />
-            <span class="empty-title">EdgeChat</span>
+            <span class="empty-title">SlimChat</span>
           </div>
           <p>{{ t('chat.noConversationSelected') }}</p>
           <button type="button" class="empty-start" @click="openAddConversation">
@@ -1618,10 +1605,6 @@ watch(
     flex-basis: 44px;
     width: 44px;
     height: 44px;
-  }
-
-  .header-action--github {
-    display: none;
   }
 
   .sidebar-header-actions {

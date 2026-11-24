@@ -5,9 +5,9 @@ import { runInNewContext } from 'node:vm';
 import { compileScript, parse } from '@vue/compiler-sfc';
 import { computed, reactive, ref } from 'vue';
 import initSqlJs from 'sql.js';
-import worker from '../worker/src/index.js';
-import { verifyPassword } from '../worker/src/auth.js';
-import { createRegistrationInvite } from '../worker/src/data/registration-invites.js';
+import worker from '../server/src/index.js';
+import { verifyPassword } from '../server/src/auth.js';
+import { createRegistrationInvite } from '../server/src/data/registration-invites.js';
 import { createD1Adapter, createKvAdapter } from './support/d1.js';
 
 const page = readFileSync(new URL('../frontend/src/pages/RegisterPage.vue', import.meta.url), 'utf8');
@@ -78,7 +78,7 @@ test('邀请注册：实际页面提交通过 Worker 校验，创建普通账号
   const SQL = await initSqlJs();
   const database = new SQL.Database();
   try {
-    database.exec(readFileSync(new URL('../worker/schema.sql', import.meta.url), 'utf8'));
+    database.exec(readFileSync(new URL('../server/db/schema.sql', import.meta.url), 'utf8'));
     const env = { DB: createD1Adapter(database), SESSIONS: createKvAdapter() };
     await createRegistrationInvite(env.DB, { token: 'local-invite-test', note: '', maxUses: 1, createdBy: null });
     const state = registrationPage(async (token, body) => {

@@ -2,16 +2,16 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import initSqlJs from 'sql.js';
-import worker from '../worker/src/index.js';
-import { createSession, hashPassword } from '../worker/src/auth.js';
-import { recordLoginInfo } from '../worker/src/data/user-login-info.ts';
-import { submitGate } from '../worker/src/stealth/gate.ts';
-import { createGateAppearance, renderGate } from '../worker/src/stealth/appearance.ts';
+import worker from '../server/src/index.js';
+import { createSession, hashPassword } from '../server/src/auth.js';
+import { recordLoginInfo } from '../server/src/data/user-login-info.ts';
+import { submitGate } from '../server/src/stealth/gate.ts';
+import { createGateAppearance, renderGate } from '../server/src/stealth/appearance.ts';
 import { describeUserAgent } from '../frontend/src/admin/user-agent.ts';
 import { createD1Adapter, createKvAdapter } from './support/d1.js';
 
 const SQL = await initSqlJs();
-const schema = readFileSync(new URL('../worker/schema.sql', import.meta.url), 'utf8');
+const schema = readFileSync(new URL('../server/db/schema.sql', import.meta.url), 'utf8');
 const password = await hashPassword('password');
 const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
 
@@ -235,7 +235,7 @@ test('历史迁移：保存可用首末信息、无重复首条、无虚构 UA�
   const { database } = await harness();
   database.run('DROP TRIGGER limit_user_login_info');
   database.run('DROP TABLE user_login_info');
-  const readMigration = (name) => readFileSync(new URL(`../worker/migrations/${name}.sql`, import.meta.url), 'utf8');
+  const readMigration = (name) => readFileSync(new URL(`../server/db/migrations/${name}.sql`, import.meta.url), 'utf8');
   database.exec(readMigration('2026-10-05-user-login-info'));
   database.exec(readMigration('2026-10-05-user-webrtc'));
   database.run(`INSERT INTO user_login_info (user_id, first_ip, first_login_at, last_ip, last_login_at, user_agent,

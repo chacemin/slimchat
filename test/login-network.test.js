@@ -31,7 +31,7 @@ test('WebRTC 探测：只收 STUN 地址、去重限量并释放，无媒体或 
   const { Peer, peers } = mockPeer();
   const result = await probeWebRtc({ signal: new AbortController().signal, PeerConnection: Peer });
   assert.deepEqual(result, { status: 'completed', ips: ['192.0.2.10', '2001:db8::10', '192.0.2.11', '192.0.2.12'] });
-  assert.deepEqual(peers[0].config.iceServers, [{ urls: 'stun:stun.cloudflare.com:3478' }]);
+  assert.deepEqual(peers[0].config.iceServers, []);
   assert.equal(peers[0].closed, true);
   assert.equal(peers[0].onicecandidate, null);
 });

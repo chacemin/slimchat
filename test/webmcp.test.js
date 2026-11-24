@@ -5,8 +5,8 @@ import { createServer } from 'vite';
 
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 let vite;
-let createEdgeChatWebMcpTools;
-let registerEdgeChatWebMcp;
+let createSlimChatWebMcpTools;
+let registerSlimChatWebMcp;
 
 before(async () => {
   vite = await createServer({
@@ -16,7 +16,7 @@ before(async () => {
     logLevel: 'silent',
     server: { middlewareMode: true }
   });
-  ({ createEdgeChatWebMcpTools, registerEdgeChatWebMcp } = await vite.ssrLoadModule(
+  ({ createSlimChatWebMcpTools, registerSlimChatWebMcp } = await vite.ssrLoadModule(
     '/frontend/src/webmcp.ts'
   ));
 });
@@ -47,7 +47,7 @@ function createApi(overrides = {}) {
 }
 
 function toolMap(apiClient = createApi(), overrides = {}) {
-  const tools = createEdgeChatWebMcpTools({
+  const tools = createSlimChatWebMcpTools({
     apiClient,
     createMessageId: () => '11111111-1111-4111-8111-111111111111',
     getSession: () => ({ userId: 1 }),
@@ -81,12 +81,12 @@ test('WebMCP 第一版只注册五个基础工具并标注读写属性', () => {
 
 test('WebMCP 注册入口一次性注册全部工具并保持幂等', async () => {
   const registered = [];
-  const result = await registerEdgeChatWebMcp({
+  const result = await registerSlimChatWebMcp({
     registerTool(tool) {
       registered.push(tool.name);
     }
   });
-  const repeated = await registerEdgeChatWebMcp({
+  const repeated = await registerSlimChatWebMcp({
     registerTool() {
       throw new Error('不应重复注册');
     }
@@ -215,6 +215,6 @@ test('打开私聊按准确用户名解析目标，并要求当前存在登录�
   const signedOutTools = toolMap(createApi(), { getSession: () => null });
   await assert.rejects(
     signedOutTools.get('edgechat.list_channels').execute({}),
-    /请先登录 EdgeChat/
+    /请先登录 SlimChat/
   );
 });

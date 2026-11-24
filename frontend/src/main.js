@@ -67,7 +67,7 @@ initializeI18n().finally(() => {
   app.use(router);
   app.mount('#app');
   if (typeof document.modelContext?.registerTool === 'function') {
-    void import('./webmcp.ts').then(({ registerEdgeChatWebMcp }) => registerEdgeChatWebMcp()).catch(() => {
+    void import('./webmcp.ts').then(({ registerSlimChatWebMcp }) => registerSlimChatWebMcp()).catch(() => {
       // 实验性浏览器集成不可用时，普通聊天仍应正常启动。
     });
   }

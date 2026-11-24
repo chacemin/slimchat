@@ -1,21 +1,38 @@
 services:
-  edgechat:
-    build: .
-    ports:
-      - "8788:8787"
-    environment:
-      - NODE_ENV=production
-      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-}
-      - CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID:-}
+  slimchat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: slimchat:0.1.0
+    container_name: slimchat
     restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # The container must listen on all interfaces; the host port controls exposure.
+      SLIMCHAT_HOST: 0.0.0.0
+      SLIMCHAT_PORT: 8787
+      SLIMCHAT_DATA_DIR: /app/data
+      SLIMCHAT_ADMIN_USERNAME: ${SLIMCHAT_ADMIN_USERNAME:-admin}
+      SLIMCHAT_ADMIN_PASSWORD: ${SLIMCHAT_ADMIN_PASSWORD:-}
+      SLIMCHAT_ADMIN_DISPLAY_NAME: ${SLIMCHAT_ADMIN_DISPLAY_NAME:-管理员}
+    ports:
+      - "${SLIMCHAT_PUBLISH_ADDRESS:-127.0.0.1}:${SLIMCHAT_PUBLISH_PORT:-8787}:8787"
     volumes:
-      - wrangler-state:/app/.wrangler/state
-    networks:
-      - edgechat-network
-
-networks:
-  edgechat-network:
-    driver: bridge
+      - slimchat-data:/app/data
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - "fetch('http://127.0.0.1:8787/api/health').then(r=>r.json()).then(j=>process.exit(j.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    stop_grace_period: 20s
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
-  wrangler-state:
+  slimchat-data:

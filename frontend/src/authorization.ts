@@ -2,8 +2,7 @@ import { hasPermission } from '../../shared/admin-permissions.ts';
 import store from './store.js';
 export const PAGE_PERMISSIONS = {
   dashboard: ['dashboard.read'], users: ['users.read'], channels: ['channels.read'], storage: ['storage.read'],
-  invites: ['users.create', 'invites.read'], telegram: ['telegram.read'], site: ['site.read'],
-  'instance-bridge': ['instance_bridge.read'], maintenance: ['maintenance.read'],
+  invites: ['users.create', 'invites.read'], site: ['site.read'], maintenance: ['maintenance.read'],
 };
 export const can = (key: string) => hasPermission(store.session, key);
 export function canVisit(page: string) {

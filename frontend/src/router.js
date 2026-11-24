@@ -38,10 +38,6 @@ const router = createRouter({
       meta: { admin: true, transition: 'page' },
       children: [
         {
-          path: 'login-verification', name: 'admin-login-verification', component: () => import('./pages/AdminLoginVerificationPage.vue'),
-          meta: { admin: true, adminTitleKey: 'verification.title', adminIcon: 'login-verification', transition: 'page' }
-        },
-        {
           path: 'rbac', name: 'admin-rbac', component: () => import('./pages/AdminRbacPage.vue'),
           meta: { admin: true, adminTitleKey: 'rbac.title', adminIcon: 'rbac', transition: 'page' }
         },
@@ -76,18 +72,6 @@ const router = createRouter({
           name: 'admin-invites',
           component: () => import('./pages/AdminInvitesPage.vue'),
           meta: { admin: true, adminTitleKey: 'admin.nav.invites', adminIcon: 'invites', transition: 'page' }
-        },
-        {
-          path: 'telegram',
-          name: 'admin-telegram',
-          component: () => import('./pages/AdminTelegramPage.vue'),
-          meta: { admin: true, adminTitleKey: 'admin.nav.telegram', adminIcon: 'telegram', transition: 'page' }
-        },
-        {
-          path: 'instance-bridge',
-          name: 'admin-instance-bridge',
-          component: () => import('./pages/AdminInstanceBridgePage.vue'),
-          meta: { admin: true, adminTitleKey: 'bridge.title', adminIcon: 'instance-bridge', transition: 'page' }
         },
         {
           path: 'stealth',
@@ -126,7 +110,7 @@ if (typeof window !== 'undefined') {
   });
 }
 
-router.beforeEach(async (to, from) => {
+router.beforeEach(async (to, _from) => {
   if (!store.ready) {
     await store.initialize();
   }
@@ -145,18 +129,6 @@ router.beforeEach(async (to, from) => {
   if (to.meta.admin) {
     try { await store.refreshAuthorization(); } catch { return '/'; }
     if (!canVisit(to.path.split('/')[2])) return firstAdminPage();
-  }
-
-  if (
-    to.meta.admin &&
-    !from.meta.admin &&
-    from.matched.length > 0 &&
-    !isDemoMode &&
-    !isCapacitorAndroid
-  ) {
-    // Cloudflare Access 按文档请求判定路径；跨入后台必须离开 SPA，才能让 /admin 经过边缘访问策略。
-    window.location.assign(router.resolve(to.fullPath).href);
-    return false;
   }
 
   return true;

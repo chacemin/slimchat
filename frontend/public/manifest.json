@@ -1,7 +1,7 @@
 {
-  "name": "Edgechat",
-  "short_name": "Edgechat",
-  "description": "Edgechat 团队沟通与协作空间",
+  "name": "SlimChat",
+  "short_name": "SlimChat",
+  "description": "SlimChat 纯本地团队沟通空间",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

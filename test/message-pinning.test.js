@@ -3,17 +3,17 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import initSqlJs from "sql.js";
 
-import { getPinnedMessage, pinMessage } from "../worker/src/data/pins.js";
-import { softDeleteMessage } from "../worker/src/data/messages.js";
+import { getPinnedMessage, pinMessage } from "../server/src/data/pins.js";
+import { softDeleteMessage } from "../server/src/data/messages.js";
 import {
 	MessagePinningError,
 	pinRoomMessage,
 	unpinRoomMessage,
-} from "../worker/src/message-pinning.js";
+} from "../server/src/message-pinning.js";
 import { createD1Adapter } from "./support/d1.js";
 
 const SQL = await initSqlJs();
-const schema = readFileSync(new URL("../worker/schema.sql", import.meta.url), "utf8");
+const schema = readFileSync(new URL("../server/db/schema.sql", import.meta.url), "utf8");
 
 function createEnvironment() {
 	const database = new SQL.Database();

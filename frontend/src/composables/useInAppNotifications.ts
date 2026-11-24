@@ -58,8 +58,8 @@ export function useInAppNotifications(options: {
 
 	function showNotification(event: InAppNotificationEvent) {
 		const id = nextId++;
-		const senderName = event.sender?.displayName || event.sender?.username || "EdgeChat";
-		const roomName = event.room.name || "EdgeChat";
+		const senderName = event.sender?.displayName || event.sender?.username || "SlimChat";
+		const roomName = event.room.name || "SlimChat";
 			const preview =
 				messageMarkdownToPlainText(event.contentPreview || "") ||
 			(event.room.kind === "dm"

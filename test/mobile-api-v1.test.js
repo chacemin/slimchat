@@ -3,22 +3,22 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import initSqlJs from 'sql.js';
 
-import worker from '../worker/src/index.js';
-import { hashPassword } from '../worker/src/auth.js';
+import worker from '../server/src/index.js';
+import { hashPassword } from '../server/src/auth.js';
 import {
   getRoomSyncCursor,
   insertMessageIdempotent,
   listRoomMessageEvents
-} from '../worker/src/data/messages.js';
-import { runScheduledGc } from '../worker/src/gc.js';
-import { saveUploadedFile } from '../worker/src/api/upload.js';
+} from '../server/src/data/messages.js';
+import { runScheduledGc } from '../server/src/gc.js';
+import { saveUploadedFile } from '../server/src/api/upload.js';
 import {
   createMobileDeviceSession,
   refreshMobileDeviceSession,
   revokeMobileDeviceSession
-} from '../worker/src/mobile-session.js';
-import { issueRealtimeTicket, consumeRealtimeTicket } from '../worker/src/realtime-tickets.js';
-import { validateSession } from '../worker/src/session.js';
+} from '../server/src/mobile-session.js';
+import { issueRealtimeTicket, consumeRealtimeTicket } from '../server/src/realtime-tickets.js';
+import { validateSession } from '../server/src/session.js';
 import { createD1Adapter, createKvAdapter } from './support/d1.js';
 
 const SQL = await initSqlJs();
@@ -31,14 +31,14 @@ function encodedKey(seed = 1) {
 
 function createEnvironment() {
   const database = new SQL.Database();
-  database.exec(readFileSync(new URL('../worker/schema.sql', import.meta.url), 'utf8'));
+  database.exec(readFileSync(new URL('../server/db/schema.sql', import.meta.url), 'utf8'));
   const files = new Map();
   return {
     database,
     env: {
       DB: createD1Adapter(database),
       SESSIONS: createKvAdapter(),
-      EDGECHAT_ENCRYPTION_KEYRING: JSON.stringify({
+      ENCRYPTION_KEYRING: JSON.stringify({
         activeKeyId: 'test-v1',
         keys: { 'test-v1': encodedKey() }
       }),

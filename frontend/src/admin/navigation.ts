@@ -1,4 +1,4 @@
-import { Database, Gauge, Ghost, Link2, MessagesSquare, Palette, Send, ShieldCheck, UserPlus, Users, Wrench } from '@lucide/vue';
+import { Database, Gauge, Ghost, MessagesSquare, Palette, ShieldCheck, UserPlus, Users, Wrench } from '@lucide/vue';
 
 interface NavigationItem {
   id: string;
@@ -44,15 +44,6 @@ export const adminNavigation: NavigationSection[] = [
     ]
   },
   {
-    id: 'integrations',
-    labelKey: 'admin.nav.integrations',
-    items: [
-      { id: 'login-verification', labelKey: 'verification.title', descriptionKey: 'verification.description', to: '/admin/login-verification', icon: ShieldCheck },
-      { id: 'telegram', labelKey: 'admin.nav.telegram', descriptionKey: 'admin.nav.telegramDescription', to: '/admin/telegram', icon: Send },
-      { id: 'instance-bridge', labelKey: 'bridge.title', descriptionKey: 'bridge.description', to: '/admin/instance-bridge', icon: Link2 }
-    ]
-  },
-  {
     id: 'site-system',
     separated: true,
     items: [
@@ -63,8 +54,7 @@ export const adminNavigation: NavigationSection[] = [
         to: '/admin/site',
         icon: Palette,
         children: [
-          { id: 'site-appearance', labelKey: 'admin.nav.siteAppearance', hash: '#site-appearance' },
-          { id: 'version-update', labelKey: 'admin.nav.versionUpdate', hash: '#version-update' }
+          { id: 'site-appearance', labelKey: 'admin.nav.siteAppearance', hash: '#site-appearance' }
         ]
       },
       { id: 'storage', labelKey: 'admin.nav.storage', descriptionKey: 'admin.nav.storageDescription', to: '/admin/storage', icon: Database },

@@ -15,10 +15,6 @@ export const ADMIN_PERMISSIONS = [
   ['storage.scan', 'storage', '扫描存储', '每页最多 1000 个对象，单用户限速', 'storage.read'],
   ['site.read', 'site', '查看站点外观', '公开名称、图标与配色，不含安全配置'],
   ['site.appearance.update', 'site', '修改站点外观', '仅名称、合法图标和预设配色', 'site.read'],
-  ['telegram.read', 'telegram', '查看 Telegram 桥接', '子管理员仅查看自己拥有的群'],
-  ['telegram.mappings.manage', 'telegram', '管理 Telegram 映射', '子管理员必须是目标群主，不含 Bot 凭据', 'telegram.read', 'high'],
-  ['instance_bridge.read', 'instance_bridge', '查看实例桥接', '子管理员仅查看自己拥有的群'],
-  ['instance_bridge.manage', 'instance_bridge', '管理实例桥接', '子管理员必须是目标群主', 'instance_bridge.read', 'high'],
   ['maintenance.read', 'maintenance', '查看健康摘要', '脱敏状态，不含完整诊断'],
 ].map(([key, module, name, description, dependency, risk]) => ({
   key: key!, module: module!, name: name!, description: description!,

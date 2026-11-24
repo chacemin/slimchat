@@ -6,7 +6,6 @@ import UiAvatar from "../ui/Avatar.vue";
 import MessageAttachment from "./MessageAttachment.vue";
 import MessageMarkdown from "./MessageMarkdown.vue";
 import MessageReplyPreview from "./MessageReplyPreview.vue";
-import SenderSourceBadge from "./SenderSourceBadge.vue";
 import SenderTitleBadge from "./SenderTitleBadge.vue";
 import type { MessageSender, MessageView } from "./message-view.ts";
 
@@ -55,7 +54,6 @@ const time = computed(() => props.msg.createdAt ? formatTime(props.msg.createdAt
 			<div v-if="!isDirect && !own" class="message-sender-name">
 				<span>{{ msg.sender.displayName }}</span>
 				<SenderTitleBadge :identity="msg.sender" />
-				<SenderSourceBadge :source="msg.sender.source" :instance="msg.sender.sourceInstance" />
 			</div>
 			<MessageReplyPreview
 				v-if="msg.replyTo"
@@ -70,7 +68,7 @@ const time = computed(() => props.msg.createdAt ? formatTime(props.msg.createdAt
 				<template v-if="msg.sendStatus === 'pending'"><Clock3 :size="13" /><span>{{ t('chat.messagePending') }}</span></template>
 				<template v-else>
 					<span>{{ msg.sendError || t('chat.messageUnconfirmed') }}</span>
-					<button type="button" :aria-label="t('chat.retryMessage')" :title="t('chat.retryMessage')" @click="emit('retry', msg.clientMessageId!)"><RotateCw :size="16" /></button>
+					<button type="button" :aria-label="t('chat.retryMessage')" :title="t('chat.retryMessage')" @click="emit('retry', msg.clientMessageId)"><RotateCw :size="16" /></button>
 				</template>
 			</div>
 			<span v-else class="message-time">{{ time }}</span>

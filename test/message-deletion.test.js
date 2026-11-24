@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { softDeleteMessage } from "../worker/src/data/messages.js";
+import { softDeleteMessage } from "../server/src/data/messages.js";
 import {
 	createMessageDeletion,
 	MessageDeletionError,
-} from "../worker/src/message-deletion.js";
+} from "../server/src/message-deletion.js";
 
 function createMutationDb(changes = 1) {
 	const capture = { sql: "", binds: [] };

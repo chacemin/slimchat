@@ -23,10 +23,6 @@ const messageComposer = readFileSync(
 	new URL("../frontend/src/components/chat/MessageComposer.vue", import.meta.url),
 	"utf8",
 ).replaceAll("\r\n", "\n");
-const demoNavigator = readFileSync(
-	new URL("../frontend/src/components/demo/DemoNavigator.vue", import.meta.url),
-	"utf8",
-).replaceAll("\r\n", "\n");
 
 function getStyleRule(source, selector) {
 	const marker = `${selector} {`;
@@ -86,30 +82,6 @@ test("移动端主要操作保留四十四像素触控区域且文字发送按�
 	assert.match(messageComposer, /font-size:\s*16px;/);
 });
 
-test("窄屏演示导航避开输入区和聊天覆盖层", () => {
-	assert.match(
-		demoNavigator,
-		/bottom:\s*calc\(116px \+ env\(safe-area-inset-bottom\)\);/,
-	);
-	for (const selector of [
-		"body:has(.room-management-layer) .demo-navigator",
-		"body:has(.composer-rich-editor) .demo-navigator",
-		"body:has(.composer-attachment) .demo-navigator",
-		"body:has(.composer-reply) .demo-navigator",
-	]) {
-		assert.ok(demoNavigator.includes(selector), `演示导航缺少避让规则：${selector}`);
-	}
-});
-
-test("演示 Star 入口保留安全外链、无障碍标签与窄屏触控区域", () => {
-	assert.match(demoNavigator, /class="demo-navigator__star"[^>]*href="https:\/\/github\.com\/aozorae\/Edgechat"[^>]*target="_blank"[^>]*rel="noopener noreferrer"[^>]*:title="t\('demo\.star'\)"[^>]*:aria-label="t\('demo\.star'\)"/s);
-	assert.match(demoNavigator, /<Star[^>]*aria-hidden="true"/);
-	assert.match(getStyleRule(demoNavigator, ".demo-navigator__star:focus-visible"), /outline:\s*2px solid/);
-	const mobileStyles = demoNavigator.slice(demoNavigator.indexOf("@media (max-width: 640px)"));
-	assert.match(getStyleRule(mobileStyles, ".demo-navigator__star"), /width:\s*44px;\s*height:\s*44px;/);
-	assert.match(getStyleRule(mobileStyles, ".demo-navigator__star span"), /display:\s*none;/);
-});
-
 test("聊天侧栏跟随全屏根节点且不污染后台根节点", () => {
 	for (const selector of [
 		".left-sidebar",
@@ -139,19 +111,7 @@ test("桌面侧栏提供明确的个人设置入口并保留移动端入口", ()
 		assert.match(chatPage, /\.right-sidebar-action__label\s*{[^}]*font-size:\s*11px;/s);
 });
 
-	test("GitHub 仓库入口位于添加人员左侧并复用相同按钮尺寸", () => {
-		const githubLink = chatPage.indexOf('href="https://github.com/aozorae/Edgechat"');
-		const addConversation = chatPage.indexOf(':title="t(\'chat.addPeople\')"');
-	assert.notEqual(githubLink, -1);
-	assert.ok(githubLink < addConversation);
-	assert.match(chatPage, /src="\/github\.svg"/);
-	assert.match(chatPage, /rel="noopener noreferrer"/);
 
-	const headerAction = getStyleRule(chatPage, ".header-action");
-		assert.match(headerAction, /flex:\s*0 0 var\(--chat-control\);/);
-		assert.match(headerAction, /width:\s*var\(--chat-control\);/);
-		assert.match(headerAction, /height:\s*var\(--chat-control\);/);
-	});
 
 	test("语言切换入口位于聊天页右上区域且移动端保持可达", () => {
 		assert.doesNotMatch(chatPage, /right-sidebar-action--language/);

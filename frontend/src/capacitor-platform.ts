@@ -22,7 +22,7 @@ type NativeNotification = {
 	roomId?: number;
 };
 
-interface EdgeChatNativePlugin {
+interface SlimChatNativePlugin {
 	requestMicrophonePermission(): Promise<{
 		state: "granted" | "denied" | "prompt" | "prompt-with-rationale";
 	}>;
@@ -46,7 +46,7 @@ interface EdgeChatNativePlugin {
 
 const NATIVE_SERVER_STORAGE_KEY = "edgechat.nativeServerOrigin";
 const MAX_NATIVE_FILE_BYTES = 20 * 1024 * 1024;
-const EdgeChatNative = registerPlugin<EdgeChatNativePlugin>("EdgeChatNative");
+const SlimChatNative = registerPlugin<SlimChatNativePlugin>("EdgeChatNative");
 
 export const isCapacitorAndroid =
 	Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
@@ -55,12 +55,12 @@ let pendingNativeRoomTarget: NativeRoomTarget | null = null;
 
 export async function requestNativeMicrophonePermission() {
 	if (!isCapacitorAndroid) return;
-	const { state } = await EdgeChatNative.requestMicrophonePermission();
+	const { state } = await SlimChatNative.requestMicrophonePermission();
 	if (state !== "granted") throw new Error("native_microphone_permission_denied");
 }
 
 export async function openNativeAppSettings() {
-	if (isCapacitorAndroid) await EdgeChatNative.openAppSettings();
+	if (isCapacitorAndroid) await SlimChatNative.openAppSettings();
 }
 
 export function queueNativeRoomTarget(target: NativeRoomTarget) {
@@ -108,7 +108,7 @@ export function restoreStoredNativeServerOrigin(origin: string) {
 	}
 }
 
-export function getEdgeChatServerOrigin() {
+export function getSlimChatServerOrigin() {
 	if (isCapacitorAndroid) {
 		const storedOrigin = getStoredNativeServerOrigin();
 		if (!storedOrigin) {
@@ -123,7 +123,7 @@ export function resolveServerUrl(path: string) {
 	if (!isCapacitorAndroid) {
 		return path;
 	}
-	return new URL(path, `${getEdgeChatServerOrigin()}/`).toString();
+	return new URL(path, `${getSlimChatServerOrigin()}/`).toString();
 }
 
 export function resolveServerAssetUrl(value: string) {
@@ -138,7 +138,7 @@ export async function pickNativeFile(accept = "*/*") {
 		return null;
 	}
 
-	const result = await EdgeChatNative.pickFile({ accept });
+	const result = await SlimChatNative.pickFile({ accept });
 	if (result.cancelled || !result.uri || !result.name) {
 		return null;
 	}
@@ -160,13 +160,13 @@ export function getNativeNotificationBridge() {
 
 	return {
 		async checkPermission() {
-			return (await EdgeChatNative.checkNotificationPermission()).state;
+			return (await SlimChatNative.checkNotificationPermission()).state;
 		},
 		async requestPermission() {
-			return (await EdgeChatNative.requestNotificationPermission()).state;
+			return (await SlimChatNative.requestNotificationPermission()).state;
 		},
 		showNotification(notification: NativeNotification) {
-			return EdgeChatNative.showNotification(notification);
+			return SlimChatNative.showNotification(notification);
 		},
 	};
 }
@@ -185,7 +185,7 @@ export async function installCapacitorIntegration(options: {
 		return;
 	}
 
-	await EdgeChatNative.addListener("notificationOpened", options.onOpenRoom);
+	await SlimChatNative.addListener("notificationOpened", options.onOpenRoom);
 	document.addEventListener("click", (event) => {
 		const anchor = (event.target as Element | null)?.closest?.("a[href]");
 		if (!(anchor instanceof HTMLAnchorElement) || !isExternalAnchor(anchor)) {
@@ -193,6 +193,6 @@ export async function installCapacitorIntegration(options: {
 		}
 
 		event.preventDefault();
-		void EdgeChatNative.openExternal({ url: anchor.href });
+		void SlimChatNative.openExternal({ url: anchor.href });
 	});
 }

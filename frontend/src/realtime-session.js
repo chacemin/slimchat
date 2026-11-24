@@ -44,6 +44,7 @@ export function createRealtimeSession({
 	let activeKey = "";
 	let connectingSocket = null;
 	let connectingKey = "";
+	let connectingPending = false;
 	let connectionGeneration = 0;
 	let reconnectTimer = null;
 	let reconnectAttempt = 0;
@@ -179,7 +180,29 @@ export function createRealtimeSession({
 		let socket = null;
 		const queuedStatuses = [];
 		const queuedMessages = [];
-		socket = openConnection(params, {
+		const attach = (resolved) => {
+			connectingPending = false;
+			if (generation !== connectionGeneration) {
+				try { resolved?.close?.(); } catch {}
+				return;
+			}
+			socket = resolved;
+			connectingSocket = resolved;
+			connectingKey = key;
+			for (const event of queuedStatuses) {
+				handleConnectionStatus(event, event.socket || resolved, generation, key);
+			}
+			for (const [frame, sourceSocket] of queuedMessages) {
+				if (
+					generation === connectionGeneration &&
+					sourceSocket === activeSocket &&
+					activeKey === key
+				) {
+					onMessage?.(parseFrame(frame), { key, socket: sourceSocket });
+				}
+			}
+		};
+		const opened = openConnection(params, {
 			onStatus(event) {
 				if (!socket) {
 					queuedStatuses.push(event);
@@ -202,20 +225,18 @@ export function createRealtimeSession({
 				onMessage?.(parseFrame(frame), { key, socket: sourceSocket });
 			},
 		});
-		connectingSocket = socket;
-		connectingKey = key;
-		for (const event of queuedStatuses) {
-			handleConnectionStatus(event, event.socket || socket, generation, key);
+		if (opened && typeof opened.then === "function") {
+			connectingPending = true;
+			connectingKey = key;
+			opened.then(attach).catch(() => {
+				connectingPending = false;
+				if (generation !== connectionGeneration) return;
+				emitStatus({ status: "error", key });
+				scheduleReconnect({ code: 1006 }, generation);
+			});
+			return;
 		}
-		for (const [frame, sourceSocket] of queuedMessages) {
-			if (
-				generation === connectionGeneration &&
-				sourceSocket === activeSocket &&
-				activeKey === key
-			) {
-				onMessage?.(parseFrame(frame), { key, socket: sourceSocket });
-			}
-		}
+		attach(opened);
 	}
 
 	function connect(key, params = {}) {
@@ -226,7 +247,7 @@ export function createRealtimeSession({
 		desiredConnection = { key, params };
 		clearReconnectTimer();
 		if (
-			(connectingKey === key && connectingSocket?.readyState === 0) ||
+			(connectingKey === key && (connectingPending || connectingSocket?.readyState === 0)) ||
 			(activeKey === key && isSocketOpen(activeSocket))
 		) {
 			return;
@@ -245,6 +266,7 @@ export function createRealtimeSession({
 		markSocketForClose(activeSocket);
 		connectingSocket = null;
 		connectingKey = "";
+		connectingPending = false;
 		activeSocket = null;
 		activeKey = "";
 		emitStatus({ status: "closed", key: "" });

@@ -42,7 +42,7 @@ const state = reactive({
   token: isDemoMode ? runtimeSessionToken : getStoredToken(),
   session: null,
   site: {
-    siteName: 'Edgechat',
+    siteName: 'SlimChat',
     siteIconUrl: '',
     colorTheme: 'default'
   }
@@ -168,7 +168,7 @@ function refreshAuthorization() {
 
 function setSite(site) {
   state.site = {
-    siteName: String(site?.siteName || 'Edgechat').trim() || 'Edgechat',
+    siteName: String(site?.siteName || 'SlimChat').trim() || 'SlimChat',
     siteIconUrl: String(site?.siteIconUrl || '').trim(),
     colorTheme: normalizeSiteColorTheme(site?.colorTheme)
   };

@@ -38,21 +38,10 @@ test("login submission reads the values currently displayed by Android WebView",
 	);
 });
 
-test("Capacitor Android CI builds an independent tested APK", () => {
-	const workflow = read("../.github/workflows/capacitor-android-ci.yml");
+test("Capacitor Android keeps a local, tested build path", () => {
 	const gradleRunner = read("../capacitor/scripts/run-gradle.mjs");
 	const appBuild = read("../capacitor/android/app/build.gradle");
 	const viteConfig = read("../frontend/vite.capacitor.config.js");
-	assert.match(workflow, /actions\/setup-node@v5/);
-	assert.match(workflow, /node-version: "24"/);
-	assert.match(workflow, /android-actions\/setup-android@v3[\s\S]*packages: platform-tools/);
-	assert.match(workflow, /gradle\/actions\/wrapper-validation@v4/);
-	assert.match(workflow, /npm run build:capacitor/);
-	assert.match(workflow, /edgechat-capacitor-debug/);
-	assert.match(
-		workflow,
-		/capacitor\/android\/app\/build\/outputs\/apk\/debug\/app-debug\.apk/,
-	);
 	for (const task of [
 		":app:testDebugUnitTest",
 		":app:lintDebug",

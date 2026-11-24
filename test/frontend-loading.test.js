@@ -33,7 +33,7 @@ test('login/chat first screens exclude admin, settings, contacts, dialogs and Vd
 
 test('each admin route and each deferred dialog remains available in its own loading graph', () => {
   for (const page of ['AdminPage', 'AdminDashboardPage', 'AdminUsersPage', 'AdminStoragePage',
-    'AdminInvitesPage', 'AdminTelegramPage', 'AdminInstanceBridgePage', 'AdminStealthPage',
+    'AdminInvitesPage', 'AdminStealthPage',
     'AdminMaintenancePage', 'AdminSitePage', 'SettingsPage', 'ContactsPage']) {
     assert.ok(analysis.files.has(analysis.chunkFor(`/src/pages/${page}.vue`)));
   }

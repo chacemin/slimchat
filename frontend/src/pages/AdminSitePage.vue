@@ -1,6 +1,5 @@
 <script setup>
 import AdminSiteAppearance from '../components/admin/AdminSiteAppearance.vue';
-import AdminUpdateStatus from '../components/admin/AdminUpdateStatus.vue';
 import { t } from '../i18n.js';
 </script>
 
@@ -18,7 +17,6 @@ import { t } from '../i18n.js';
         <AdminSiteAppearance />
       </section>
       <section id="version-update" class="admin-anchor-section">
-        <AdminUpdateStatus />
       </section>
     </div>
   </div>

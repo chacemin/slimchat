@@ -5,12 +5,12 @@ import {
 	listAdminChannels,
 	listChannelMembers,
 	listVisibleChannels,
-} from "../worker/src/data/channels.js";
-import { listAdminDms, listUserDms } from "../worker/src/data/dm-queries.js";
-import { listMessages, mapMessage } from "../worker/src/data/messages.js";
-import { getSiteSettings } from "../worker/src/data/site-settings.js";
-import { countUnreadMessages, listRoomMemberIds } from "../worker/src/data/unread.js";
-import { listAdminUsers } from "../worker/src/data/users.js";
+} from "../server/src/data/channels.js";
+import { listAdminDms, listUserDms } from "../server/src/data/dm-queries.js";
+import { listMessages, mapMessage } from "../server/src/data/messages.js";
+import { getSiteSettings } from "../server/src/data/site-settings.js";
+import { countUnreadMessages, listRoomMemberIds } from "../server/src/data/unread.js";
+import { listAdminUsers } from "../server/src/data/users.js";
 
 function createQueryDb(results) {
 	const capture = { sql: "", binds: [] };
@@ -227,7 +227,7 @@ test("站点设置 projection 使用稳定默认值", async () => {
 	});
 	const defaults = createQueryDb([]);
 	assert.deepEqual(await getSiteSettings(defaults.db), {
-		siteName: "Edgechat",
+		siteName: "SlimChat",
 		siteIconUrl: "",
 		colorTheme: "default",
 	});

@@ -2,12 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import initSqlJs from 'sql.js';
-import worker from '../worker/src/index.js';
-import { hashPassword, createSession } from '../worker/src/auth.js';
-import { getUserByUsername } from '../worker/src/data/users.js';
-import { createRegistrationInvite } from '../worker/src/data/registration-invites.js';
-import { generateBootstrapSql } from '../.github/scripts/generate-admin-bootstrap-sql.mjs';
-import { syncAdminCredentials } from '../.github/scripts/sync-admin-credentials.ts';
+import worker from '../server/src/index.js';
+import { hashPassword, createSession } from '../server/src/auth.js';
+import { getUserByUsername } from '../server/src/data/users.js';
+import { createRegistrationInvite } from '../server/src/data/registration-invites.js';
 import { isValidNewUsername, USERNAME_RULE_ERROR } from '../shared/username.ts';
 import { buildVditorMentionHints } from '../frontend/src/vditor-mention-hints.ts';
 import { createD1Adapter, createKvAdapter } from './support/d1.js';
@@ -42,9 +40,10 @@ test('邀请与管理员建号拒绝无效标识，不消耗邀请、不写账�
   const SQL = await initSqlJs();
   const database = new SQL.Database();
   try {
-    database.exec(readFileSync(new URL('../worker/schema.sql', import.meta.url), 'utf8'));
-    database.exec(await generateBootstrapSql({ username: 'root', password: 'local-test' }));
-    const env = { DB: createD1Adapter(database), SESSIONS: createKvAdapter() };
+    database.exec(readFileSync(new URL('../server/db/schema.sql', import.meta.url), 'utf8'));
+    const rootHash = await hashPassword('local-test');
+    database.run("INSERT INTO users (username, display_name, password_hash, password_salt, is_super_admin) VALUES ('root', 'root', ?, ?, 1)", [rootHash.hash, rootHash.salt]);
+        const env = { DB: createD1Adapter(database), SESSIONS: createKvAdapter() };
     const root = await createSession(env, await getUserByUsername(env.DB, 'root'));
     await createRegistrationInvite(env.DB, { token: 'local-test', maxUses: 2, note: '', createdBy: null });
     const request = (path, username, token = '') => worker.fetch(new Request(`https://username.test/api${path}`, {
@@ -69,20 +68,20 @@ test('邀请与管理员建号拒绝无效标识，不消耗邀请、不写账�
 
 test('初始化拒绝无效新用户名；旧用户名仍能登录和同步超管密码，不改名', async () => {
   for (const username of invalidNames.filter(Boolean)) {
-    await assert.rejects(generateBootstrapSql({ username, password: 'local-test' }), { message: USERNAME_RULE_ERROR });
+    assert.equal(isValidNewUsername(username), false, username);
   }
   const SQL = await initSqlJs();
   const database = new SQL.Database();
   try {
-    database.exec(readFileSync(new URL('../worker/schema.sql', import.meta.url), 'utf8'));
+    database.exec(readFileSync(new URL('../server/db/schema.sql', import.meta.url), 'utf8'));
     const username = "legacy'owner";
     const password = await hashPassword('old');
     database.run(`INSERT INTO users (username, display_name, password_hash, password_salt, is_super_admin)
       VALUES (?, ?, ?, ?, 1)`, [username, username, password.hash, password.salt]);
     const env = { DB: createD1Adapter(database), SESSIONS: createKvAdapter() };
-    const query = async (sql, params = []) => (await env.DB.prepare(sql).bind(...params).all()).results;
-    assert.equal(await syncAdminCredentials({ username, password: 'new' }, query), 'updated');
-    const response = await worker.fetch(new Request('https://username.test/api/auth/login', {
+    const next = await hashPassword('new');
+    database.run('UPDATE users SET password_hash = ?, password_salt = ?, session_version = session_version + 1 WHERE username = ?', [next.hash, next.salt, username]);
+        const response = await worker.fetch(new Request('https://username.test/api/auth/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password: 'new' }),
     }), env, { waitUntil(promise) { promise.catch(() => {}); } });
     assert.equal(response.status, 200);

@@ -3,15 +3,11 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import initSqlJs from 'sql.js';
 import { createD1Adapter } from './support/d1.js';
-import { authorizeVoiceCall } from '../worker/src/calls/access.ts';
-import { generateCallIceServers } from '../worker/src/calls/turn.ts';
-import { callExpired, nextCallState } from '../worker/src/calls/state.ts';
-import { handleCallLease } from '../worker/src/calls/lease.ts';
+import { authorizeVoiceCall } from '../server/src/calls/access.ts';
+import { generateCallIceServers } from '../server/src/calls/turn.ts';
+import { callExpired, nextCallState } from '../server/src/calls/state.ts';
 import { createVoiceCallClient } from '../frontend/src/calls/client.ts';
 import { CALL_RING_MS, CALL_MAX_MS } from '../shared/voice-call.ts';
-import { UserInbox } from '../worker/src/do/UserInbox.js';
-import { VoiceCall } from '../worker/src/do/VoiceCall.ts';
-import { createVerifiedPrincipalHeaders } from '../worker/src/verified-identity.js';
 
 const callId = '00000000-0000-0000-0000-000000000001';
 const callerClient = '00000000-0000-0000-0000-000000000002';
@@ -59,24 +55,25 @@ test('call timeouts cover ringing, missing heartbeats, and maximum duration', ()
   assert.equal(callExpired(call, CALL_MAX_MS + 100), true);
 });
 
-test('TURN keys stay server-side and issued credentials exclude browser-blocked port 53', async () => {
-  let request;
-  const result = await generateCallIceServers({ EDGECHAT_TURN_KEY_ID: 'key-id', EDGECHAT_TURN_API_TOKEN: 'secret' }, async (url, options) => {
-    request = { url, options };
-    return Response.json({ iceServers: [{ urls: ['turn:turn.cloudflare.com:53?transport=udp', 'turns:turn.cloudflare.com:443?transport=tcp'], username: 'short', credential: 'temporary' }] }, { status: 201 });
-  });
-  assert.equal(request.options.headers.Authorization, 'Bearer secret');
-  assert.equal(JSON.parse(request.options.body).ttl, 3600);
-  assert.equal(result.iceServers[0].urls.length, 1);
-  assert.equal(JSON.stringify(result).includes('secret'), false);
-  await assert.rejects(generateCallIceServers({}), /尚未配置/);
-  await assert.rejects(generateCallIceServers({ EDGECHAT_TURN_KEY_ID: 'k', EDGECHAT_TURN_API_TOKEN: 's' }, async () => Response.json({ error: 'internal secret' }, { status: 500 })), /暂时不可用/);
+test('local coturn credentials stay in-process and support a shared secret', async () => {
+  const staticIce = await generateCallIceServers({ CONFIG: {
+    turnUrl: 'turn:127.0.0.1:3478', turnUsername: 'local', turnCredential: 'secret'
+  } });
+  assert.deepEqual(staticIce.iceServers, [
+    { urls: 'turn:127.0.0.1:3478', username: 'local', credential: 'secret' }
+  ]);
+  const sharedIce = await generateCallIceServers({ CONFIG: {
+    turnUrl: 'turns:127.0.0.1:5349', turnSharedSecret: 'shared-secret'
+  } });
+  assert.match(sharedIce.iceServers[0].username, /^\d+:slimchat$/);
+  assert.ok(sharedIce.iceServers[0].credential);
+  assert.deepEqual((await generateCallIceServers({ CONFIG: {} })).iceServers, []);
 });
 
 test('call authorization excludes groups, nonparticipants, disabled peers, and either block direction', async () => {
   const SQL = await initSqlJs();
   const database = new SQL.Database();
-  database.exec(readFileSync(new URL('../worker/schema.sql', import.meta.url), 'utf8'));
+  database.exec(readFileSync(new URL('../server/db/schema.sql', import.meta.url), 'utf8'));
   database.run("INSERT INTO users(id,username,display_name,password_hash,password_salt) VALUES (1,'alice','Alice','h','s'),(2,'bob','Bob','h','s'),(3,'admin','Admin','h','s')");
   database.run("INSERT INTO channels(id,name,kind,dm_key,created_by) VALUES (10,'dm','dm','1:2',1)");
   database.run('INSERT INTO channel_members(channel_id,user_id) VALUES(10,1),(10,2)');
@@ -91,20 +88,6 @@ test('call authorization excludes groups, nonparticipants, disabled peers, and e
   database.run('UPDATE users SET is_disabled=1 WHERE id=2');
   await assert.rejects(authorizeVoiceCall(db, 10, 1), /不可用/);
   database.close();
-});
-
-test('per-user leases refuse concurrent calls and stale releases cannot clear the current lease', async () => {
-  const entries = new Map();
-  const storage = { get: async key => entries.get(key), put: async (key, value) => entries.set(key, value), delete: async key => entries.delete(key), transaction: async operation => operation(storage) };
-  const request = (path, body, verified = true) => new Request(`https://internal/${path}`, { method: 'POST', headers: verified ? { 'x-cfchat-internal-auth': 'worker-verified' } : {}, body: JSON.stringify(body) });
-  const lease = { callId, expiresAt: Date.now() + 10000 };
-  assert.equal((await handleCallLease(request('call-claim', lease), storage)).status, 200);
-  assert.equal((await handleCallLease(request('call-claim', { ...lease, callId: callerClient }), storage)).status, 409);
-  await handleCallLease(request('call-release', { callId: callerClient }), storage);
-  assert.equal(entries.get('callLease').callId, callId);
-  assert.equal((await handleCallLease(request('call-claim', lease, false), storage)).status, 401);
-  await handleCallLease(request('call-release', { callId }), storage);
-  assert.equal(entries.has('callLease'), false);
 });
 
 function clientHarness(options = {}) {
@@ -179,56 +162,4 @@ test('failed P2P starts one automatic relay renegotiation', async context => {
     await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
     assert.ok(h.actions.some(action => action.type === 'restart' && action.mode === 'relay'));
   } finally { h.client.reset(); }
-});
-
-test('expired Inbox sessions receive no SDP, while legacy inboxes keep their chat connection', async () => {
-  const socket = meta => ({ meta, packets: [], code: null, deserializeAttachment() { return this.meta; }, send(packet) { this.packets.push(JSON.parse(packet)); }, close(code) { this.code = code; } });
-  const valid = socket({ userId: 2, token: 'valid' });
-  const expired = socket({ userId: 2, token: 'expired' });
-  const legacy = socket({ userId: 2 });
-  const inbox = new UserInbox({ getWebSockets: () => [valid, expired, legacy] }, {
-    SESSIONS: { get: async token => token === 'valid' ? JSON.stringify({ userId: 2, sessionVersion: 0, isAdmin: false }) : null },
-    DB: { prepare: () => ({ bind: () => ({ all: async () => ({ results: [{ username: 'bob', session_version: 0, is_admin: 0 }] }) }) }) }
-  });
-  await inbox.broadcastCall({ type: 'call_signal', sdp: 'v=0' });
-  assert.equal(valid.packets.length, 1);
-  assert.equal(expired.packets.length, 0);
-  assert.equal(expired.code, 4401);
-  assert.equal(legacy.packets.length, 0);
-  assert.equal(legacy.code, null);
-});
-
-test('VoiceCall persists across eviction, arbitrates accept, forwards signals and clears leases', async () => {
-  const SQL = await initSqlJs();
-  const database = new SQL.Database();
-  database.exec(readFileSync(new URL('../worker/schema.sql', import.meta.url), 'utf8'));
-  database.run("INSERT INTO users(id,username,display_name,password_hash,password_salt) VALUES(1,'alice','Alice','h','s'),(2,'bob','Bob','h','s')");
-  database.run("INSERT INTO channels(id,name,kind,dm_key,created_by) VALUES(4,'dm','dm','1:2',1)");
-  database.run('INSERT INTO channel_members(channel_id,user_id) VALUES(4,1),(4,2)');
-  const values = new Map();
-  const notifications = [];
-  const leases = new Map();
-  const storage = { get: async key => values.get(key), put: async (key, value) => values.set(key, structuredClone(value)), delete: async keys => { for (const key of Array.isArray(keys) ? keys : [keys]) values.delete(key); }, setAlarm: async () => {}, deleteAlarm: async () => {} };
-  const env = { DB: createD1Adapter(database), USER_INBOX: { idFromName: name => name, get: user => ({ fetch: async (url, options) => {
-    const payload = JSON.parse(options.body);
-    if (new URL(url).pathname === '/notify') notifications.push({ user, payload });
-    else if (new URL(url).pathname === '/call-release') { if (leases.get(user)?.callId === payload.callId) leases.delete(user); }
-    else { if (leases.has(user) && leases.get(user).callId !== payload.callId) return Response.json({ ok: false }, { status: 409 }); leases.set(user, payload); }
-    return Response.json({ ok: true });
-  } }) } };
-  let object = new VoiceCall({ storage }, env);
-  const request = (userId, body) => object.fetch(new Request('https://internal/action?roomId=4', { method: 'POST', headers: createVerifiedPrincipalHeaders({ 'Content-Type': 'application/json' }, { userId }), body: JSON.stringify(body) }));
-  assert.equal((await request(1, start)).status, 200);
-  assert.equal(notifications.filter(event => event.payload.type === 'call_invite').length, 2);
-  object = new VoiceCall({ storage }, env);
-  assert.equal((await request(2, { type: 'accept', callId, clientId: calleeClient, mode: 'auto' })).status, 200);
-  assert.equal((await request(2, { type: 'accept', callId, clientId: callerClient, mode: 'auto' })).status, 409);
-  assert.equal((await request(1, { type: 'offer', callId, clientId: callerClient, revision: 1, sdp: 'v=0\r\n' })).status, 200);
-  assert.equal(notifications.at(-1).user, 'user:2');
-  assert.equal(notifications.at(-1).payload.signal.type, 'offer');
-  assert.equal((await request(2, { type: 'hangup', callId, clientId: calleeClient })).status, 200);
-  assert.equal(values.has('call'), false);
-  assert.equal(leases.size, 0);
-  assert.equal(notifications.at(-1).payload.type, 'call_ended');
-  database.close();
 });

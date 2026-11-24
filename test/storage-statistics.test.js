@@ -10,8 +10,8 @@ import {
 import {
   storageOwnerFromObjectKey,
   summarizeR2Objects
-} from '../worker/src/storage-statistics.js';
-import { registerStorageRoutes } from '../worker/src/api/storage.ts';
+} from '../server/src/storage-statistics.js';
+import { registerStorageRoutes } from '../server/src/api/storage.ts';
 
 function storageScanHandler() {
   let handler;
@@ -27,16 +27,11 @@ function storageScanHandler() {
   return handler;
 }
 
-test('R2 object keys resolve to users, Telegram, and unknown owners', () => {
+test('object keys resolve to users and unknown owners', () => {
   assert.deepEqual(storageOwnerFromObjectKey('12/file.png'), {
     key: 'user:12',
     type: 'user',
     userId: 12
-  });
-  assert.deepEqual(storageOwnerFromObjectKey('telegram/chat/file.bin'), {
-    key: 'system:telegram',
-    type: 'telegram',
-    userId: null
   });
   assert.deepEqual(storageOwnerFromObjectKey('legacy/file.bin'), {
     key: 'system:unknown',
@@ -45,11 +40,10 @@ test('R2 object keys resolve to users, Telegram, and unknown owners', () => {
   });
 });
 
-test('one R2 page is aggregated without exposing object keys', () => {
+test('one storage page is aggregated without exposing object keys', () => {
   const items = summarizeR2Objects([
     { key: '2/a.bin', size: 100, uploaded: new Date('2026-08-11T00:00:00Z') },
-    { key: '2/b.bin', size: 250, uploaded: new Date('2026-08-12T00:00:00Z') },
-    { key: 'telegram/1/c.bin', size: 50, uploaded: new Date('2026-08-10T00:00:00Z') }
+    { key: '2/b.bin', size: 250, uploaded: new Date('2026-08-12T00:00:00Z') }
   ]);
 
   assert.deepEqual(items, [
@@ -60,24 +54,16 @@ test('one R2 page is aggregated without exposing object keys', () => {
       objectCount: 2,
       bytes: 350,
       latestUploadedAt: '2026-08-12T00:00:00.000Z'
-    },
-    {
-      ownerKey: 'system:telegram',
-      ownerType: 'telegram',
-      ownerId: null,
-      objectCount: 1,
-      bytes: 50,
-      latestUploadedAt: '2026-08-10T00:00:00.000Z'
     }
   ]);
   assert.equal('key' in items[0], false);
 });
 
-test('storage scan returns a structured 503 response when R2 is unavailable', async () => {
+test('storage scan returns a structured 503 response when local storage is unavailable', async () => {
   await assert.rejects(() => storageScanHandler()({
     env: {},
     req: { url: 'https://edgechat.example/api/admin/storage/scan' }
-  }), (error) => error.status === 503 && error.message === '当前部署没有绑定 R2，无法统计存储空间');
+  }), (error) => error.status === 503 && error.message === '本地文件存储不可用');
 });
 
 test('paged summaries merge and include active zero-usage users', () => {

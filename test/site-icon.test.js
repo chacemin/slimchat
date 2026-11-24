@@ -4,21 +4,21 @@ import test from "node:test";
 import { Hono } from "hono";
 import initSqlJs from "sql.js";
 
-import { registerAdminRoutes } from "../worker/src/api/admin.js";
-import { getSiteSettings, updateSiteSettings } from "../worker/src/data/site-settings.js";
-import { canAccessFile } from "../worker/src/data/uploaded-files.js";
-import { saveUploadedFile } from "../worker/src/api/upload.js";
-import worker from "../worker/src/index.js";
-import { saveStealthSettings } from "../worker/src/data/stealth-settings.ts";
-import { runScheduledGc } from "../worker/src/gc.js";
+import { registerAdminRoutes } from "../server/src/api/admin.js";
+import { getSiteSettings, updateSiteSettings } from "../server/src/data/site-settings.js";
+import { canAccessFile } from "../server/src/data/uploaded-files.js";
+import { saveUploadedFile } from "../server/src/api/upload.js";
+import worker from "../server/src/index.js";
+import { saveStealthSettings } from "../server/src/data/stealth-settings.ts";
+import { runScheduledGc } from "../server/src/gc.js";
 import {
 	classifyStoredSiteIcon,
 	normalizeSiteIconForStorage,
-} from "../worker/src/site-icon.js";
+} from "../server/src/site-icon.js";
 import { createD1Adapter } from "./support/d1.js";
 
 const SQL = await initSqlJs();
-const schemaSql = readFileSync(new URL("../worker/schema.sql", import.meta.url), "utf8");
+const schemaSql = readFileSync(new URL("../server/db/schema.sql", import.meta.url), "utf8");
 
 function createHarness(key = "1/icon.png") {
 	const database = new SQL.Database();
@@ -94,7 +94,7 @@ for (const [label, storedValue] of [
 test("本站完整 URL 保存为原子保护的本地 key，外链不阻止无关孤儿清理", async () => {
 	const local = createHarness();
 	const saved = await updateSiteSettings(local.db, {
-		siteName: "Edgechat",
+		siteName: "SlimChat",
 		siteIconUrl: "https://chat.example/files/1%2Ficon.png",
 		siteOrigin: "https://chat.example",
 	});
@@ -114,12 +114,12 @@ test("本站完整 URL 保存为原子保护的本地 key，外链不阻止无�
 
 	const external = createHarness("1/orphan.png");
 	await updateSiteSettings(external.db, {
-		siteName: "Edgechat",
+		siteName: "SlimChat",
 		siteIconUrl: "https://cdn.example/icon.png",
 		siteOrigin: "https://chat.example",
 	});
 	assert.deepEqual(await getSiteSettings(external.db), {
-		siteName: "Edgechat",
+		siteName: "SlimChat",
 		siteIconUrl: "https://cdn.example/icon.png",
 			colorTheme: "default",
 	});
@@ -170,7 +170,7 @@ test("管理 API 将站点图标竞态映射为明确业务错误", async () => 
 			method: "PATCH",
 			headers: { "content-type": "application/json" },
 			body: JSON.stringify({
-				siteName: "Edgechat",
+				siteName: "SlimChat",
 				siteIconUrl: "https://chat.example/files/1%2Ficon.png",
 			}),
 		}),
@@ -187,14 +187,15 @@ test("上传图标保存后可匿名读取与解密，替换、清除及隐身�
 	const objects = new Map();
 	const env = {
 		DB: db,
-		EDGECHAT_ENCRYPTION_KEYRING: JSON.stringify({ activeKeyId: 'test', keys: { test: Buffer.alloc(32, 1).toString('base64') } }),
+		ENCRYPTION_KEYRING: JSON.stringify({ activeKeyId: 'test', keys: { test: Buffer.alloc(32, 1).toString('base64') } }),
 		FILES: {
 			async put(key, bytes, metadata) { objects.set(key, { bytes, metadata }); },
 			async get(key) {
 				const object = objects.get(key);
 				return object ? {
+					lastModified: Date.now(),
+					async exists() { return true; },
 					async arrayBuffer() { return object.bytes; },
-					writeHttpMetadata(headers) { headers.set('content-type', object.metadata.httpMetadata.contentType); },
 				} : null;
 			},
 		},

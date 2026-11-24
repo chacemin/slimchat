@@ -1,5 +1,5 @@
 import { dispatchAuthInvalid, getStoredToken } from './auth-storage.js';
-import { getEdgeChatServerOrigin, resolveServerUrl } from './capacitor-platform.ts';
+import { getSlimChatServerOrigin, resolveServerUrl } from './capacitor-platform.ts';
 import { t } from './i18n.js';
 import { localizedError, localizeErrorMessage } from './localized-error.js';
 import { getRuntimeFileUrl, isDemoMode, requestRuntime } from './runtime.js';
@@ -60,10 +60,6 @@ async function request(path, options = {}) {
 
 export default {
   loginVerification() { return request('/auth/verification'); },
-  adminLoginVerification() { return request('/admin/login-verification'); },
-  saveAdminLoginVerification(body) {
-    return request('/admin/login-verification', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body });
-  },
   authorization() { return request('/me/authorization'); },
   rbacRoles(offset = 0) { return request(`/admin/rbac/roles?offset=${offset}`); },
   rbacPermissions() { return request('/admin/rbac/permissions'); },
@@ -92,14 +88,6 @@ export default {
     return request('/admin/stealth', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: { enabled }
     });
-  },
-  instanceBridge(path = '', body) {
-    return request(`/admin/instance-bridge${path}`, body ? {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body
-    } : {});
-  },
-  roomInstanceBridge(roomId) {
-    return request(`/channels/${roomId}/instance-bridge`);
   },
   login(credentials) {
     return request('/auth/login', {
@@ -246,18 +234,31 @@ export default {
       body: form
     });
   },
-  getRoomWebSocketUrl(kind, roomId) {
-    const token = getStoredToken();
-    const url = new URL(`${apiPrefix}/ws/${kind}/${roomId}`, getEdgeChatServerOrigin());
+  realtimeTicket(payload) {
+    return request('/v1/realtime/tickets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload
+    });
+  },
+  async getRoomWebSocketUrl(kind, roomId) {
+    const { ticket } = await request('/v1/realtime/tickets', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: { scope: 'room', roomKind: kind, roomId }
+    });
+    const url = new URL(`${apiPrefix}/v1/realtime/ws`, getSlimChatServerOrigin());
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    url.searchParams.set('token', token || '');
+    url.searchParams.set('ticket', ticket || '');
     return url.toString();
   },
-  getInboxWebSocketUrl() {
-    const token = getStoredToken();
-    const url = new URL(`${apiPrefix}/inbox/ws`, getEdgeChatServerOrigin());
+  async getInboxWebSocketUrl() {
+    const { ticket } = await request('/v1/realtime/tickets', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: { scope: 'inbox' }
+    });
+    const url = new URL(`${apiPrefix}/v1/realtime/ws`, getSlimChatServerOrigin());
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    url.searchParams.set('token', token || '');
+    url.searchParams.set('ticket', ticket || '');
     return url.toString();
   },
   getFileUrl(keyOrUrl) {
@@ -270,8 +271,8 @@ export default {
     }
 
     const url = raw.startsWith('/files/')
-      ? new URL(resolveServerUrl(raw), getEdgeChatServerOrigin())
-      : new URL(resolveServerUrl(`/files/${encodeURIComponent(raw)}`), getEdgeChatServerOrigin());
+      ? new URL(resolveServerUrl(raw), getSlimChatServerOrigin())
+      : new URL(resolveServerUrl(`/files/${encodeURIComponent(raw)}`), getSlimChatServerOrigin());
     const token = getStoredToken();
     if (token) {
       url.searchParams.set('token', token);
@@ -300,47 +301,6 @@ export default {
   },
   adminSiteSettings() {
     return request('/admin/site-settings');
-  },
-  adminTelegram() {
-    return request('/admin/telegram');
-  },
-  telegramNotifications() {
-    return request('/me/telegram-notifications');
-  },
-  createTelegramNotificationLink() {
-    return request('/me/telegram-notifications/link', { method: 'POST' });
-  },
-  updateTelegramNotifications(payload) {
-    return request('/me/telegram-notifications', {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: payload
-    });
-  },
-  disconnectTelegramNotifications() {
-    return request('/me/telegram-notifications', { method: 'DELETE' });
-  },
-  saveAdminTelegramConfig(payload) {
-    return request('/admin/telegram/config', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: payload
-    });
-  },
-  createAdminTelegramMapping(payload) {
-    return request('/admin/telegram/mappings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: payload
-    });
-  },
-  updateAdminTelegramMapping(mappingId, payload) {
-    return request(`/admin/telegram/mappings/${mappingId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: payload
-    });
-  },
-  deleteAdminTelegramMapping(mappingId) {
-    return request(`/admin/telegram/mappings/${mappingId}`, { method: 'DELETE' });
   },
   listAdminRegisterLinks() {
     return request('/admin/register-links');

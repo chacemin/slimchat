@@ -3,14 +3,14 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import initSqlJs from "sql.js";
 
-import { insertMessage } from "../worker/src/data/messages.js";
-import { canAccessFile } from "../worker/src/data/uploaded-files.js";
-import { ORPHAN_UPLOAD_QUERY, runScheduledGc } from "../worker/src/gc.js";
-import { createMessageSubmission } from "../worker/src/message-submission.js";
+import { insertMessage } from "../server/src/data/messages.js";
+import { canAccessFile } from "../server/src/data/uploaded-files.js";
+import { ORPHAN_UPLOAD_QUERY, runScheduledGc } from "../server/src/gc.js";
+import { createMessageSubmission } from "../server/src/message-submission.js";
 import { createD1Adapter } from "./support/d1.js";
 
 const SQL = await initSqlJs();
-const schemaSql = readFileSync(new URL("../worker/schema.sql", import.meta.url), "utf8");
+const schemaSql = readFileSync(new URL("../server/db/schema.sql", import.meta.url), "utf8");
 
 function createDatabase() {
 	const database = new SQL.Database();
@@ -336,7 +336,7 @@ test("消息预检查后发生完整 GC，实际提交路径返回附件不可�
 		submit(
 			{
 				DB: racingDb,
-				EDGECHAT_ENCRYPTION_KEYRING: JSON.stringify({
+				ENCRYPTION_KEYRING: JSON.stringify({
 					activeKeyId: "test",
 					keys: { test: Buffer.alloc(32, 7).toString("base64") },
 				}),

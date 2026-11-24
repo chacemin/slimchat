@@ -2,18 +2,16 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import initSqlJs from 'sql.js';
-import worker from '../worker/src/index.js';
+import worker from '../server/src/index.js';
 import { createD1Adapter, createKvAdapter } from './support/d1.js';
-import { createSession, hashPassword } from '../worker/src/auth.js';
-import { getStealthSettings, saveStealthSettings } from '../worker/src/data/stealth-settings.ts';
-import { cookieRequestAllowed, cookieToken, sessionCookie } from '../worker/src/session-cookie.ts';
-import { createSiteEntry } from '../worker/src/stealth/entry.ts';
-import { gatePage } from '../worker/src/stealth/gate.ts';
-import { appearanceOptions, createGateAppearance, isGateAppearance } from '../worker/src/stealth/appearance.ts';
-import { saveTelegramBridgeConfig } from '../worker/src/data/telegram.js';
+import { createSession, hashPassword } from '../server/src/auth.js';
+import { getStealthSettings, saveStealthSettings } from '../server/src/data/stealth-settings.ts';
+import { cookieRequestAllowed, cookieToken, sessionCookie } from '../server/src/session-cookie.ts';
+import { gatePage } from '../server/src/stealth/gate.ts';
+import { appearanceOptions, createGateAppearance, isGateAppearance } from '../server/src/stealth/appearance.ts';
 
 const SQL = await initSqlJs();
-const schema = readFileSync(new URL('../worker/schema.sql', import.meta.url), 'utf8');
+const schema = readFileSync(new URL('../server/db/schema.sql', import.meta.url), 'utf8');
 const password = await hashPassword('test-password');
 const origin = 'https://example.test';
 const context = { waitUntil() {}, passThroughOnException() {} };
@@ -30,7 +28,7 @@ async function fixture(enabled = true) {
   const env = {
     DB: createD1Adapter(database),
     SESSIONS: createKvAdapter(),
-    EDGECHAT_ENCRYPTION_KEYRING: JSON.stringify({ activeKeyId: 'test', keys: { test: Buffer.alloc(32, 1).toString('base64') } }),
+    ENCRYPTION_KEYRING: JSON.stringify({ activeKeyId: 'test', keys: { test: Buffer.alloc(32, 1).toString('base64') } }),
     ASSETS: {
       async fetch(request) {
         accessed.push(request.url);
@@ -96,7 +94,7 @@ test('常见互联网探测路径、方法与无效凭据均得相同普通 404�
     '/logo.svg', '/favicon.ico', '/manifest.json', '/sw.js', '/vendor/vditor/dist/js/lute/lute.min.js',
     '/api/health', '/api/site', '/api/auth/login', '/api/v1/capabilities',
     '/api/ws/public/1', '/api/inbox/ws', '/api/admin/maintenance',
-    '/files/1/avatar.png', '/api/integrations/telegram/avatar/1', '/api/register-links/token',
+    '/files/1/avatar.png', '/api/register-links/token',
     '/register/token', '/admin', '/unknown', `${f.settings.apiPrefix}/site`]) {
     const response = await f.request(path);
     assert.equal(response.status, 404, path);
@@ -281,38 +279,6 @@ test('登出删除 KV Session 并清 Cookie，此后无法再次下载资源', a
   assert.equal((await f.request('/assets/main.js', { headers: { cookie } })).status, 404);
 });
 
-test('Telegram 有效凭据照常回调，无凭据/伪造凭据只得到普通 404', async () => {
-  const f = await fixture();
-  await saveTelegramBridgeConfig(f.env, {
-    botToken: '123456:test', webhookSecret: 'test-secret', botUsername: 'test_bot',
-    webhookUrl: `${origin}/api/integrations/telegram/webhook`, updatedBy: 1,
-  });
-  for (const secret of ['', 'wrong', 'test-secret']) {
-    const response = await f.request('/api/integrations/telegram/webhook', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(secret ? { 'X-Telegram-Bot-Api-Secret-Token': secret } : {}) },
-      body: '{}',
-    });
-    assert.equal(response.status, secret === 'test-secret' ? 200 : 404);
-    if (secret !== 'test-secret') assert.equal(await response.text(), 'Not Found');
-  }
-});
-
-test('伪造跨实例请求不暴露协议错误，签名后的业务错误仍交还可信对端', async () => {
-  const f = await fixture();
-  const invalid = await f.request('/api/integrations/instance-bridge/v1', {
-    method: 'POST', headers: { 'x-edgechat-signature': 'fake' }, body: '{}',
-  });
-  assert.equal(invalid.status, 404);
-  assert.equal(await invalid.text(), 'Not Found');
-  const entry = createSiteEntry(async () => new Response('signed error', { status: 409, headers: { 'x-edgechat-signature': 'verified-response' } }));
-  const signed = await entry(new Request(`${origin}/api/integrations/instance-bridge/v1`, {
-    method: 'POST', headers: { 'x-edgechat-signature': 'request' },
-  }), f.env, context);
-  assert.equal(signed.status, 409);
-  assert.equal(await signed.text(), 'signed error');
-});
-
 test('设置读取异常时 fail closed，不公开 SPA 或内部错误', async () => {
   const f = await fixture();
   f.env.DB = { prepare() { throw new Error('secret SQL stack'); } };
@@ -353,8 +319,3 @@ test('页面模块的两两组合保持小体积、无外部资源、固定表�
   }
 });
 
-test('生产与 CI 模板强制 Worker-first', () => {
-  const config = readFileSync(new URL('../wrangler.example.toml', import.meta.url), 'utf8');
-  assert.match(config, /binding = "ASSETS"/);
-  assert.match(config, /run_worker_first = true/);
-});

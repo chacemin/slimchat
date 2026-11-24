@@ -3,7 +3,7 @@ import { resolveServerAssetUrl } from './capacitor-platform.ts';
 const defaultIconAttributes = new WeakMap();
 
 export function applySiteMetadata(site) {
-  document.title = String(site?.siteName || 'Edgechat').trim() || 'Edgechat';
+  document.title = String(site?.siteName || 'SlimChat').trim() || 'SlimChat';
   const siteIconUrl = String(site?.siteIconUrl || '').trim();
 
   for (const [rel, fallback] of [['icon', '/logo.svg'], ['apple-touch-icon', '/icon-192.png']]) {

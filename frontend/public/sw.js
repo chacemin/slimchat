@@ -1,38 +1,57 @@
-// Edgechat minimal service worker.
-// Purpose: satisfy the PWA installability requirement so Chrome/Edge show the
-// install button in the address bar. It intentionally does NOT cache anything
-// and does NOT intercept API, /files, or WebSocket traffic — every request is
-// passed straight through to the network.
+// SlimChat service worker.
+// Provides PWA installability and a basic offline app shell. API, /files and
+// WebSocket traffic are never cached; hashed static assets are cached at runtime.
+const CACHE_NAME = 'slimchat-shell-v1';
 
-self.addEventListener('install', () => {
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(['/', '/manifest.json', '/logo.svg', '/icon-192.png']))
+      .catch(() => undefined)
+  );
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim())
+  );
 });
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
 
-  // Never touch non-GET requests (PUT/POST/DELETE, WebSocket upgrades, etc.).
-  if (request.method !== 'GET') {
-    return;
-  }
+  if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith('/api') || url.pathname.startsWith('/files')) return;
 
-  // Same-origin GET requests, including page navigations, pass through here;
-  // API, uploads and cross-origin requests use the browser's default handling.
-  if (url.origin !== self.location.origin) {
+  // Navigations: network first so upgrades are picked up, cache fallback offline.
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put('/', response.clone()));
+          return response;
+        })
+        .catch(() => caches.match('/'))
+    );
     return;
   }
-  if (url.pathname.startsWith('/api') || url.pathname.startsWith('/files')) {
-    return;
-  }
 
-  // Pass-through response; no caching, so nothing goes stale.
-  event.respondWith(fetch(request));
+  // Hashed build assets: cache first, then fill the cache in the background.
+  event.respondWith(
+    caches.match(request).then((cached) => {
+      if (cached) return cached;
+      return fetch(request).then((response) => {
+        if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone()));
+        return response;
+      });
+    })
+  );
 });
 
 // Focus (or open) the app when a system notification is clicked, and tell the
@@ -56,6 +75,6 @@ self.addEventListener('notificationclick', (event) => {
           url.searchParams.set('notificationRoomId', String(data.roomId));
         }
         return self.clients.openWindow(url.href);
-      }),
+      })
   );
 });

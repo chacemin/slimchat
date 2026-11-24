@@ -9,20 +9,23 @@ import { getStoredNativeServerOrigin, isCapacitorAndroid } from '../capacitor-pl
 import { readLoginSubmission } from '../login-submission.ts';
 import { loadAuthFonts } from '../auth-fonts.js';
 import api from '../api.js';
-import LoginVerification from '../components/LoginVerification.vue';
 
-onMounted(loadAuthFonts);
+onMounted(async () => {
+  loadAuthFonts();
+  try { gateRequired.value = Boolean((await api.loginVerification()).enabled); } catch { gateRequired.value = false; }
+});
 
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
 const loading = ref(false);
 const error = ref('');
-const verification = ref(null);
+const gateRequired = ref(false);
 const form = reactive({
   serverOrigin: getStoredNativeServerOrigin(),
   username: '',
-  password: ''
+  password: '',
+  loginGate: ''
 });
 const registered = computed(() => route.query.registered === '1');
 
@@ -50,12 +53,11 @@ async function submit(event) {
     if (isCapacitorAndroid) {
       await store.configureNativeServer(serverOrigin);
     }
-    const configuration = await api.loginVerification();
-    if (configuration.enabled) credentials.turnstileToken = await verification.value.verify(configuration.siteKey);
+    if (gateRequired.value) credentials.loginGate = form.loginGate;
     await store.login(credentials);
     router.push('/');
   } catch (currentError) {
-    error.value = currentError.message.startsWith('turnstile_') ? t('verification.failed') : currentError.message === 'native_server_https_required'
+    error.value = currentError.message === 'native_server_https_required'
       ? t('auth.serverHttpsRequired')
       : currentError.message === 'native_server_unavailable'
         ? t('auth.serverUnavailable')
@@ -119,7 +121,17 @@ async function submit(event) {
           />
         </div>
 
-        <LoginVerification ref="verification" />
+        <div v-if="gateRequired" class="input-wrapper">
+          <input
+            v-model="form.loginGate"
+            class="login-input"
+            :placeholder="t('auth.accessCode')"
+            autocomplete="off"
+            name="loginGate"
+            required
+            type="password"
+          />
+        </div>
         <button class="login-btn" :disabled="loading" type="submit">
           {{ loading ? t('auth.signingIn') : t('auth.signIn') }}
         </button>

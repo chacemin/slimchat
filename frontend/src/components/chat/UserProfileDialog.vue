@@ -46,7 +46,7 @@ useOverlayLifecycle({
           <UiAvatar :src="displayed?.avatarUrl" :fallback="displayed?.displayName" size="lg" />
           <h3>{{ displayed?.displayName }}</h3>
           <p v-if="!external && displayed && 'username' in displayed && displayed.username">@{{ displayed.username }}</p>
-          <span class="user-profile-dialog__source">{{ external ? (identity?.kind === 'external' && identity.source === 'telegram' ? 'Telegram' : t('profile.external')) : t('profile.local') }}</span>
+          <span class="user-profile-dialog__source">{{ external ? t('profile.external') : t('profile.local') }}</span>
         </div>
         <p v-if="loading" role="status">{{ t('common.loading') }}</p>
         <p v-else-if="unavailable" role="status">{{ t('profile.unavailable') }}</p>

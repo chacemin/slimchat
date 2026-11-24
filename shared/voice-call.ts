@@ -7,7 +7,8 @@ export interface CallAction {
 export const CALL_RING_MS = 45_000;
 export const CALL_MAX_MS = 3_600_000;
 export const CALL_HEARTBEAT_MS = 75_000;
-export const CALL_STUN = [{ urls: 'stun:stun.cloudflare.com:3478' }];
+// 纯本地/局域网部署不依赖公网 STUN；跨网段由本地 coturn 中继。
+export const CALL_STUN: Array<{ urls: string }> = [];
 
 export function validCallId(value: unknown): value is string {
   return typeof value === 'string' && /^[a-f0-9-]{36}$/i.test(value);

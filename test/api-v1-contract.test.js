@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const openapi = readFileSync(
-	new URL("../docs/api/edgechat-v1.openapi.yaml", import.meta.url),
+	new URL("../docs/api/slimchat-v1.openapi.yaml", import.meta.url),
 	"utf8",
 ).replaceAll("\r\n", "\n");
 const websocket = readFileSync(

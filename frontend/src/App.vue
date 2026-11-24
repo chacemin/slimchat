@@ -1,14 +1,9 @@
 <script setup>
-import { defineAsyncComponent } from 'vue';
 import ChunkLoadNotice from './components/ChunkLoadNotice.vue';
 import store from './store.js';
 import { useI18n } from './i18n.js';
 
 const { t } = useI18n();
-
-const DemoNavigator = globalThis.__EDGECHAT_DEMO__
-  ? defineAsyncComponent(() => import('./components/demo/DemoNavigator.vue'))
-  : null;
 </script>
 
 <template>
@@ -20,7 +15,6 @@ const DemoNavigator = globalThis.__EDGECHAT_DEMO__
       <component :is="Component" :key="route.meta.workspace ? 'workspace' : route.path" />
     </Transition>
   </router-view>
-  <component :is="DemoNavigator" v-if="DemoNavigator" />
   <ChunkLoadNotice />
 </template>
 

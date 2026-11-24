@@ -1,7 +1,6 @@
 <script setup>
 import { ref } from 'vue';
 import MessageAttachment from './MessageAttachment.vue';
-import SenderSourceBadge from './SenderSourceBadge.vue';
 import UiAvatar from '../ui/Avatar.vue';
 import UiButton from '../ui/Button.vue';
 import UiSurface from '../ui/Surface.vue';
@@ -113,7 +112,6 @@ defineExpose({
           <div class="chat-bubble__meta">
             <strong>
               {{ isOwnMessage(message) ? t('messages.you') : message.sender.displayName }}
-              <SenderSourceBadge :source="message.sender.source" />
             </strong>
             <span>{{ formatTime(message.createdAt) }}</span>
           </div>

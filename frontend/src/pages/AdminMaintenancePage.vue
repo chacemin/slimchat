@@ -11,7 +11,16 @@ const report = ref(null);
 const loading = ref(false);
 const error = ref('');
 const schema = computed(() => report.value?.checks.find((check) => check.id === 'schema')?.schema);
+const runtime = computed(() => report.value?.runtime);
 const detailKeys = ['missingArtifacts', 'missingMigrations', 'changedMigrations', 'unknownMigrations'];
+function formatBytes(value) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes < 0) return '—';
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
+}
 const checkedTime = computed(() => report.value ? new Date(report.value.checkedAt).toLocaleString(locale.value) : '');
 
 async function runChecks() {
@@ -31,7 +40,7 @@ function exportReport() {
   const url = URL.createObjectURL(new Blob([JSON.stringify(report.value, null, 2)], { type: 'application/json' }));
   const link = document.createElement('a');
   link.href = url;
-  link.download = `edgechat-diagnostics-${report.value.checkedAt.slice(0, 10)}.json`;
+  link.download = `slimchat-diagnostics-${report.value.checkedAt.slice(0, 10)}.json`;
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -62,7 +71,6 @@ function exportReport() {
         <p>{{ t('maintenance.emptyDescription') }}</p>
       </div>
       <template v-else>
-        <p v-if="report.demo" class="maintenance-demo">{{ t('maintenance.demo') }}</p>
         <div class="maintenance-summary" :data-status="report.status" role="status">
           <CheckCircle2 v-if="report.status === 'ok'" :size="24" aria-hidden="true" />
           <CircleAlert v-else :size="24" aria-hidden="true" />
@@ -79,6 +87,16 @@ function exportReport() {
             <p>{{ t('maintenance.expected', { version: report.expectedMigration }) }}</p>
             <p v-if="schema">{{ t('maintenance.progress', { applied: schema.appliedCount, expected: schema.expectedCount }) }}</p>
           </div>
+        </dl>
+        <dl v-if="store.session?.isSuperAdmin && runtime" class="maintenance-versions maintenance-runtime">
+          <div><dt>{{ t('maintenance.dataDir') }}</dt><dd><code>{{ runtime.dataDir }}</code></dd></div>
+          <div><dt>{{ t('maintenance.dbSize') }}</dt><dd>{{ formatBytes(runtime.dbBytes) }}</dd></div>
+          <div><dt>{{ t('maintenance.diskFree') }}</dt><dd>{{ formatBytes(runtime.diskFreeBytes) }}</dd></div>
+          <div><dt>{{ t('maintenance.fileObjects') }}</dt><dd>{{ runtime.fileObjects ?? '—' }}</dd></div>
+          <div><dt>{{ t('maintenance.wsConnections') }}</dt><dd>{{ runtime.wsConnections }} · {{ runtime.wsRooms }} / {{ runtime.wsInboxes }}</dd></div>
+          <div><dt>{{ t('maintenance.keyring') }}</dt><dd><code>{{ runtime.keyringActiveKeyId || '—' }}</code> · {{ runtime.keyringKeyCount }}</dd></div>
+          <div><dt>{{ t('maintenance.activeCalls') }}</dt><dd>{{ runtime.activeCalls }}</dd></div>
+          <div><dt>{{ t('maintenance.tableCount') }}</dt><dd>{{ runtime.tableCount ?? '—' }}</dd></div>
         </dl>
         <div class="maintenance-checks" role="table" :aria-label="t('maintenance.check')">
           <div class="maintenance-checks__head" role="row">

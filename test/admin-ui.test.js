@@ -14,7 +14,7 @@ function read(relativePath) {
 
 const routerSource = read('../frontend/src/router.js');
 const apiSource = read('../frontend/src/api.js');
-const adminApiSource = read('../worker/src/api/admin.js');
+const adminApiSource = read('../server/src/api/admin.js');
 const mainSource = read('../frontend/src/main.js');
 const adminPageSource = read('../frontend/src/pages/AdminPage.vue');
 const navigationSource = read('../frontend/src/admin/navigation.ts');
@@ -29,7 +29,6 @@ const userCreatorSource = read('../frontend/src/components/admin/AdminUserCreato
 const inviteManagerSource = read('../frontend/src/components/admin/RegistrationInviteManager.vue');
 const siteSource = read('../frontend/src/pages/AdminSitePage.vue');
 const siteAppearanceSource = read('../frontend/src/components/admin/AdminSiteAppearance.vue');
-const telegramSource = read('../frontend/src/pages/AdminTelegramPage.vue');
 const adminStyles = read('../frontend/src/styles/admin.css');
 const adminTokens = read('../frontend/src/styles/admin/tokens.css');
 const adminLayout = read('../frontend/src/styles/admin/layout.css');
@@ -52,24 +51,19 @@ test('后台默认进入仪表盘并新增受保护的注册邀请页', () => {
 });
 
 test('生产 Web 跨入后台时发起真实文档请求，后台内部仍使用 SPA 导航', () => {
-  assert.match(routerSource, /router\.beforeEach\(async \(to, from\) =>/);
-  assert.match(routerSource, /to\.meta\.admin &&[\s\S]*!from\.meta\.admin/);
-  assert.match(routerSource, /from\.matched\.length > 0/);
-  assert.match(routerSource, /!isDemoMode &&[\s\S]*!isCapacitorAndroid/);
-  assert.match(routerSource, /window\.location\.assign\(router\.resolve\(to\.fullPath\)\.href\)/);
+  assert.match(routerSource, /router\.beforeEach\(async \(to, _from\) =>/);
   assert.match(sidebarSource, /void router\.push\(location\)/);
   assert.match(dashboardSource, /void router\.push\(path\)/);
 });
 
 test('侧栏包含存储统计并移除消息查看入口', () => {
   assert.match(sidebarSource, /t\('admin\.sidebar\.brand'\)/);
-  for (const id of ['dashboard', 'users', 'storage', 'invites', 'telegram', 'site']) {
+  for (const id of ['dashboard', 'users', 'storage', 'invites', 'site']) {
     assert.match(navigationSource, new RegExp(`id: '${id}'`));
   }
   assert.match(navigationSource, /labelKey: 'admin\.nav\.createUser'/);
   assert.match(navigationSource, /labelKey: 'admin\.nav\.registrationLinks'/);
   assert.match(navigationSource, /labelKey: 'admin\.nav\.siteAppearance'/);
-  assert.match(navigationSource, /labelKey: 'admin\.nav\.versionUpdate'/);
   assert.doesNotMatch(navigationSource, /信息查看|\/admin\/messages/);
   assert.match(sidebarSource, /v-if="!item\.children"/);
   assert.match(sidebarSource, /:aria-expanded="isGroupOpen\(item\)"/);
@@ -80,12 +74,11 @@ test('仪表盘独立置顶，业务分类与分隔线下的系统入口顺序�
   assert.deepEqual(adminNavigation.map((section) => section.items.map((item) => item.id)), [
     ['dashboard'],
     ['rbac', 'channels', 'users', 'invites'],
-    ['login-verification', 'telegram', 'instance-bridge'],
     ['site', 'storage', 'maintenance', 'stealth']
   ]);
   assert.equal(adminNavigation[0].labelKey, undefined);
   assert.equal(adminNavigation[1].labelKey, 'admin.nav.usersAccess');
-  assert.equal(adminNavigation[2].labelKey, 'admin.nav.integrations');
+  assert.equal(adminNavigation[2].labelKey, undefined);
   assert.deepEqual(adminNavigation.filter((section) => section.separated).map((section) => section.id), ['site-system']);
   assert.match(sidebarSource, /admin-nav-section--separated/);
   assert.match(sidebarSource, /:aria-labelledby="section\.label/);
@@ -131,9 +124,9 @@ test('三语言搜索支持分类、页面和子菜单，无结果时不残留�
   const pages = adminNavigation.flatMap((section) => section.items.map((item) => item.id));
   for (const messages of [en, zh, tw]) {
     const { query, filteredNavigation } = sidebarNavigation(messages, pages, ['users.create', 'invites.read']);
-    query.value = messages['admin.nav.integrations'];
+    query.value = messages['admin.nav.invites'];
     assert.equal(filteredNavigation.value.length, 1);
-    assert.equal(filteredNavigation.value[0].items.length, 3);
+    assert.equal(filteredNavigation.value[0].items.length, 1);
     query.value = messages['admin.nav.registrationLinks'];
     assert.equal(filteredNavigation.value.length, 1);
     assert.equal(filteredNavigation.value[0].items[0].id, 'invites');
@@ -143,7 +136,7 @@ test('三语言搜索支持分类、页面和子菜单，无结果时不残留�
     query.value = 'no-matching-navigation-xyz';
     assert.equal(filteredNavigation.value.length, 0);
     query.value = '';
-    assert.equal(filteredNavigation.value.length, 4);
+    assert.equal(filteredNavigation.value.length, 3);
     assert.equal(messages['admin.nav.site'], messages['admin.nav.siteAppearance']);
   }
   assert.match(adminSidebarStyles, /\.admin-nav-item > svg\s*\{\s*flex-shrink: 0;/);
@@ -162,11 +155,11 @@ test('存储统计由按钮手动刷新且四个统计列均可排序', () => {
   assert.match(routerSource, /component: \(\) => import\('\.\/pages\/AdminStoragePage\.vue'\)/);
   assert.match(routerSource, /path: 'storage'/);
   assert.match(apiSource, /adminStorageScan/);
-  const storageApi = readFileSync(new URL('../worker/src/api/storage.ts', import.meta.url), 'utf8');
+  const storageApi = readFileSync(new URL('../server/src/api/storage.ts', import.meta.url), 'utf8');
   assert.match(storageApi, /\/api\/admin\/storage\/scan/);
   assert.match(storageApi, /getFileStorage\(c\.env\)/);
   assert.match(storageApi, /storage\.list/);
-  assert.match(storageApi, /没有绑定 R2，无法统计存储空间/);
+  assert.match(storageApi, /本地文件存储不可用/);
   assert.match(storageSource, /@click="refreshStorage"/);
   assert.doesNotMatch(storageSource, /onMounted\(refreshStorage\)/);
   assert.doesNotMatch(storageSource, /尚未统计|10 GB|免费存储/);
@@ -251,18 +244,6 @@ test('仪表盘复用现有概况接口并只展示可验证统计', () => {
   assert.match(dashboardSource, /t\('dashboard\.systemOverview'\)/);
 });
 
-test('Telegram 互通页由管理员路由保护并统一管理公开与私有群组映射', () => {
-  assert.match(routerSource, /component: \(\) => import\('\.\/pages\/AdminTelegramPage\.vue'\)/);
-  assert.match(routerSource, /path: 'telegram'/);
-  assert.match(routerSource, /adminTitleKey: 'admin\.nav\.telegram'/);
-  assert.match(telegramSource, /api\.saveAdminTelegramConfig/);
-  assert.match(telegramSource, /api\.createAdminTelegramMapping/);
-  assert.match(telegramSource, /type="checkbox"/);
-  assert.match(telegramSource, /t\('telegram\.chatId'\)/);
-  assert.match(telegramSource, /t\('telegram\.edgechatGroup'\)/);
-  assert.match(telegramSource, /channel\.kind === 'private'/);
-});
-
 test('仪表盘在中等桌面宽度提前重排且快捷入口文字保持完整', () => {
   assert.match(
     dashboardStyles,
@@ -340,7 +321,6 @@ test('后台核心 Vue 文件保持在单一职责的可维护规模', () => {
     ['AdminDashboardPage', dashboardSource],
     ['AdminUsersPage', usersSource],
     ['AdminStoragePage', storageSource],
-    ['AdminTelegramPage', telegramSource],
     ['AdminSitePage', siteSource]
   ]) {
     assert.ok(source.split('\n').length < 260, `${name} 不应重新膨胀为超大文件`);

@@ -2,15 +2,15 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import initSqlJs from 'sql.js';
-import worker from '../worker/src/index.js';
-import { createSession } from '../worker/src/auth.js';
-import { canAccessFile } from '../worker/src/data/uploaded-files.js';
-import { encryptAttachment } from '../worker/src/encryption.js';
-import { AUTHORIZATION_COLUMNS, AUTHORIZATION_JOIN } from '../worker/src/rbac/authorization.ts';
+import worker from '../server/src/index.js';
+import { createSession } from '../server/src/auth.js';
+import { canAccessFile } from '../server/src/data/uploaded-files.js';
+import { encryptAttachment } from '../server/src/encryption.js';
+import { AUTHORIZATION_COLUMNS, AUTHORIZATION_JOIN } from '../server/src/rbac/authorization.ts';
 import { createD1Adapter, createKvAdapter } from './support/d1.js';
 
 const SQL = await initSqlJs();
-const schema = readFileSync(new URL('../worker/schema.sql', import.meta.url), 'utf8');
+const schema = readFileSync(new URL('../server/db/schema.sql', import.meta.url), 'utf8');
 const keyring = JSON.stringify({
 	activeKeyId: 'test',
 	keys: { test: Buffer.alloc(32, 7).toString('base64') },
@@ -29,13 +29,14 @@ async function fixture(t) {
 	const env = {
 		DB: db,
 		SESSIONS: createKvAdapter(),
-		EDGECHAT_ENCRYPTION_KEYRING: keyring,
+		ENCRYPTION_KEYRING: keyring,
 		FILES: {
 			async get(key) {
 				reads.push(key);
 				return {
+					lastModified: Date.now(),
+					async exists() { return true; },
 					async arrayBuffer() { return objects.get(key); },
-					writeHttpMetadata(headers) { headers.set('content-type', 'image/png'); },
 				};
 			},
 		},

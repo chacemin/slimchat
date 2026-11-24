@@ -72,7 +72,7 @@ test('a pending site request never blocks anonymous startup or the login route',
   const { store, calls } = startup();
   await store.initialize();
   assert.equal(store.ready, true);
-  assert.equal(store.site.siteName, 'Edgechat');
+  assert.equal(store.site.siteName, 'SlimChat');
   assert.equal(store.site.colorTheme, 'default');
   assert.equal(calls.site, 1);
   assert.equal(calls.session, 0);
@@ -100,7 +100,7 @@ test('session restoration runs beside metadata and concurrent initialization sha
   await first;
   assert.equal(await navigation, true);
   assert.equal(storedToken(), 'restored');
-  assert.equal(store.site.siteName, 'Edgechat');
+  assert.equal(store.site.siteName, 'SlimChat');
   site.resolve({ site: { siteName: 'Custom site', siteIconUrl: '/custom.png', colorTheme: 'cream-sakura' } });
   await flush();
   assert.equal(store.site.siteName, 'Custom site');
@@ -118,7 +118,7 @@ test('metadata failures preserve defaults and cannot clear a restored session', 
   await flush();
   assert.equal(store.ready, true);
   assert.equal(store.session.token, 'valid');
-  assert.equal(calls.metadata.at(-1).siteName, 'Edgechat');
+  assert.equal(calls.metadata.at(-1).siteName, 'SlimChat');
 });
 
 test('invalid or timed out sessions keep protected routes closed while metadata is pending', async () => {

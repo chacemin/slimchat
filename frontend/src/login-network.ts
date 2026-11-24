@@ -22,8 +22,8 @@ export function probeWebRtc({ signal, timeoutMs = 2000, PeerConnection = globalT
     };
     const cancel = () => finish('failed');
     try {
-      // 只收集 STUN 返回的地址，不采集局域网 host/mDNS，也不使用媒体或 TURN 中继。
-      peer = new PeerConnection({ iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }], iceCandidatePoolSize: 0 });
+      // 纯本地部署不访问公网 STUN；探测仅用于可选的登录网络提示。
+      peer = new PeerConnection({ iceServers: [], iceCandidatePoolSize: 0 });
       signal.addEventListener('abort', cancel, { once: true });
       timer = setTimeout(() => finish('timeout'), timeoutMs);
       peer.onicecandidate = ({ candidate }) => {

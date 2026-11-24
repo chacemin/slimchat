@@ -5,18 +5,16 @@ import { runInNewContext } from 'node:vm';
 import { compileScript, parse } from '@vue/compiler-sfc';
 import { ref } from 'vue';
 import initSqlJs from 'sql.js';
-import worker from '../worker/src/index.js';
-import { createSession } from '../worker/src/auth.js';
-import { getUserByUsername } from '../worker/src/data/users.js';
-import { getSiteSettings, updateSiteSettings } from '../worker/src/data/site-settings.js';
+import worker from '../server/src/index.js';
+import { createSession } from '../server/src/auth.js';
+import { getUserByUsername } from '../server/src/data/users.js';
+import { getSiteSettings, updateSiteSettings } from '../server/src/data/site-settings.js';
 import { createD1Adapter, createKvAdapter } from './support/d1.js';
 import { isSiteColorTheme, normalizeSiteColorTheme } from '../shared/site-theme.ts';
 import { applySiteColorTheme } from '../frontend/src/site-theme.ts';
-import { requestDemo } from '../frontend/src/demo/api.js';
-import { resetDemoState } from '../frontend/src/demo/state.js';
 
 const SQL = await initSqlJs();
-const schema = readFileSync(new URL('../worker/schema.sql', import.meta.url), 'utf8');
+const schema = readFileSync(new URL('../server/db/schema.sql', import.meta.url), 'utf8');
 
 async function harness() {
   const database = new SQL.Database();
@@ -92,17 +90,6 @@ test('配色 API：拒绝非法值、匿名、普通用户、只读管理员与�
   assert.equal((await h.request({ colorTheme: 'cream-sakura', stealthEnabled: true })).status, 400);
   assert.equal((await h.request({ colorTheme: 'cream-sakura', siteName: '' })).status, 400);
   assert.deepEqual(await getSiteSettings(h.db), initial);
-});
-
-test('demo 配色遵循相同部分更新与白名单，重置仅恢复演示状态', async () => {
-  resetDemoState();
-  const initial = (await requestDemo('/site')).site;
-  const patch = body => requestDemo('/admin/site-settings', { method: 'PATCH', body });
-  assert.deepEqual((await patch({ colorTheme: 'cream-sakura' })).site, { ...initial, colorTheme: 'cream-sakura' });
-  assert.equal((await patch({ siteName: 'Preview' })).site.colorTheme, 'cream-sakura');
-  await assert.rejects(patch({ colorTheme: 'invalid' }), /不支持的站点配色/);
-  resetDemoState();
-  assert.deepEqual((await requestDemo('/site')).site, initial);
 });
 
 const { descriptor } = parse(readFileSync(new URL('../frontend/src/components/admin/AdminSiteTheme.vue', import.meta.url), 'utf8'));

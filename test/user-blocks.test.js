@@ -3,15 +3,15 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import initSqlJs from "sql.js";
 
-import { listUserDms } from "../worker/src/data/dm-queries.js";
+import { listUserDms } from "../server/src/data/dm-queries.js";
 import {
 	getUserBlockStatus,
 	setUserBlocked,
-} from "../worker/src/data/user-blocks.ts";
+} from "../server/src/data/user-blocks.ts";
 import {
 	MessageSubmissionError,
 	submitRoomMessage,
-} from "../worker/src/message-submission.js";
+} from "../server/src/message-submission.js";
 import { createD1Adapter } from "./support/d1.js";
 
 const SQL = await initSqlJs();
@@ -46,13 +46,13 @@ function createDm(database, firstUserId, secondUserId) {
 
 test("用户拉黑关系按方向保存，并统一阻断双方私信发送", async () => {
 	const database = new SQL.Database();
-	database.exec(readFileSync(new URL("../worker/schema.sql", import.meta.url), "utf8"));
+	database.exec(readFileSync(new URL("../server/db/schema.sql", import.meta.url), "utf8"));
 	const aliceId = insertUser(database, "alice");
 	const bobId = insertUser(database, "bob");
 	const dmId = createDm(database, aliceId, bobId);
 	const env = {
 		DB: createD1Adapter(database),
-		EDGECHAT_ENCRYPTION_KEYRING: JSON.stringify({
+		ENCRYPTION_KEYRING: JSON.stringify({
 			activeKeyId: "test-v1",
 			keys: { "test-v1": encodedKey() },
 		}),

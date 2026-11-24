@@ -73,10 +73,7 @@ export function buildStorageRows(users = [], summaries = new Map()) {
     rows.push({
       ...storageValues(summary),
       ownerKey: summary.ownerKey,
-      displayName:
-        summary.ownerType === 'telegram'
-          ? t('storage.systemTelegram')
-          : t('storage.unknownHistorical'),
+      displayName: t('storage.unknownHistorical'),
       username: '',
       isDeleted: false
     });

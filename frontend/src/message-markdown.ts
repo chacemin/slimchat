@@ -76,7 +76,7 @@ markdown.core.ruler.after("inline", "edgechat-message-text", (state) => {
 						continue;
 					}
 
-					const customToken = new state.Token(`edgechat_${part.type}`, "", 0);
+					const customToken = new state.Token(`slimchat_${part.type}`, "", 0);
 					customToken.content = part.text;
 					customToken.meta = {
 						...part,
@@ -112,7 +112,7 @@ markdown.renderer.rules.image = (tokens, index) => {
 	return `<a class="message-link message-image-link" href="${markdown.utils.escapeHtml(source)}" target="_blank" rel="noopener noreferrer">${escapedLabel}</a>`;
 };
 
-markdown.renderer.rules.edgechat_mention = (tokens, index) => {
+markdown.renderer.rules.slimchat_mention = (tokens, index) => {
 	const token = tokens[index];
 	const classes = token.meta.self
 		? "message-mention message-mention--self"
@@ -120,7 +120,7 @@ markdown.renderer.rules.edgechat_mention = (tokens, index) => {
 	return `<span class="${classes}">${markdown.utils.escapeHtml(token.content)}</span>`;
 };
 
-markdown.renderer.rules.edgechat_link = (tokens, index) => {
+markdown.renderer.rules.slimchat_link = (tokens, index) => {
 	const token = tokens[index];
 	return `<a class="message-link" href="${markdown.utils.escapeHtml(token.meta.href)}" target="_blank" rel="noopener noreferrer">${markdown.utils.escapeHtml(token.content)}</a>`;
 };

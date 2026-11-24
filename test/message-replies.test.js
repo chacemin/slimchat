@@ -3,18 +3,18 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import initSqlJs from "sql.js";
 
-import { listVisibleChannels } from "../worker/src/data/channels.js";
-import { listUserDms } from "../worker/src/data/dm-queries.js";
+import { listVisibleChannels } from "../server/src/data/channels.js";
+import { listUserDms } from "../server/src/data/dm-queries.js";
 import {
 	insertMessage,
 	listMessages,
 	softDeleteMessage,
-} from "../worker/src/data/messages.js";
-import { countUnreadAttention, markRoomRead } from "../worker/src/data/unread.js";
+} from "../server/src/data/messages.js";
+import { countUnreadAttention, markRoomRead } from "../server/src/data/unread.js";
 import {
 	MessageSubmissionError,
 	submitRoomMessage,
-} from "../worker/src/message-submission.js";
+} from "../server/src/message-submission.js";
 import { createD1Adapter } from "./support/d1.js";
 
 const SQL = await initSqlJs();
@@ -25,12 +25,12 @@ function encodedKey() {
 
 function createEnvironment() {
 	const database = new SQL.Database();
-	database.exec(readFileSync(new URL("../worker/schema.sql", import.meta.url), "utf8"));
+	database.exec(readFileSync(new URL("../server/db/schema.sql", import.meta.url), "utf8"));
 	return {
 		database,
 		env: {
 			DB: createD1Adapter(database),
-			EDGECHAT_ENCRYPTION_KEYRING: JSON.stringify({
+			ENCRYPTION_KEYRING: JSON.stringify({
 				activeKeyId: "test-v1",
 				keys: { "test-v1": encodedKey() },
 			}),

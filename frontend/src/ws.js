@@ -1,11 +1,12 @@
-import api from "./api.js";
+import api from './api.js';
 import {
 	connectRuntimeInboxSocket,
 	connectRuntimeRoomSocket,
 	isDemoMode,
-} from "./runtime.js";
+} from './runtime.js';
 
-function openSocket(url, { onMessage, onStatus }) {
+async function openSocket(urlOrPromise, { onMessage, onStatus }) {
+	const url = await urlOrPromise;
 	const socket = new WebSocket(url);
 
 	socket.addEventListener("open", () => {

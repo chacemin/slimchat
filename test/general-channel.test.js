@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Hono } from "hono";
 
-import { registerChannelRoutes } from "../worker/src/api/channels.js";
+import { registerChannelRoutes } from "../server/src/api/channels.js";
 import {
 	GENERAL_CHANNEL_NAME,
 	ensureGeneralChannelMembership,
 	isGeneralChannel,
 	isReservedGeneralChannelName,
-} from "../worker/src/data/general-channel.js";
+} from "../server/src/data/general-channel.js";
 
 function createBatchDb() {
 	const statements = [];

@@ -1,4 +1,4 @@
-# EdgeChat WebSocket v1
+# SlimChat WebSocket v1
 
 Android clients use WebSocket only while the app is visible. Sending, deleting and retrying messages stays on the idempotent HTTP API.
 

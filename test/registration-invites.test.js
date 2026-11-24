@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { ApiError } from "../worker/src/errors.js";
+import { ApiError } from "../server/src/errors.js";
 import {
 	createRegistrationInvite,
 	createUserWithRegistrationInvite,
 	getAvailableRegistrationInvite,
 	listActiveRegistrationInvites,
-} from "../worker/src/data/registration-invites.js";
+} from "../server/src/data/registration-invites.js";
 
 function createStatementDb(handlers = {}) {
 	const calls = [];
@@ -163,9 +163,9 @@ test("邀请额度耗尽和用户名重复返回稳定的公开错误", async ()
 });
 
 test("数据库与后台界面完整声明可使用次数能力", () => {
-	const schema = readFileSync(new URL("../worker/schema.sql", import.meta.url), "utf8");
+	const schema = readFileSync(new URL("../server/db/schema.sql", import.meta.url), "utf8");
 	const migration = readFileSync(
-		new URL("../worker/migrations/2026-07-29-registration-invite-usage.sql", import.meta.url),
+		new URL("../server/db/migrations/2026-07-29-registration-invite-usage.sql", import.meta.url),
 		"utf8",
 	);
 	const inviteManager = readFileSync(
@@ -184,7 +184,7 @@ test("数据库与后台界面完整声明可使用次数能力", () => {
 		new URL("../frontend/src/pages/AdminSitePage.vue", import.meta.url),
 		"utf8",
 	);
-	const adminApi = readFileSync(new URL("../worker/src/api/admin.js", import.meta.url), "utf8");
+	const adminApi = readFileSync(new URL("../server/src/api/admin.js", import.meta.url), "utf8");
 
 	for (const sql of [schema, migration]) {
 		assert.match(sql, /max_uses INTEGER NOT NULL DEFAULT 1/);

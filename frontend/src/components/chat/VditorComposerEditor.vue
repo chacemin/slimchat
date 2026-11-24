@@ -2,7 +2,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import DOMPurify from "dompurify";
 import type Vditor from "vditor";
-import type { EdgeChatVditorRuntime } from "../../vditor-runtime.ts";
+import type { SlimChatVditorRuntime } from "../../vditor-runtime.ts";
 import type { MentionUser } from "../../mentions.ts";
 import { installVditorContentSafety } from "../../vditor-content-safety.ts";
 import { buildVditorMentionHints } from "../../vditor-mention-hints.ts";
@@ -13,7 +13,7 @@ const props = defineProps<{
 	disabled?: boolean;
 	mentionCandidates?: MentionUser[];
 	placeholder: string;
-	runtime: EdgeChatVditorRuntime;
+	runtime: SlimChatVditorRuntime;
 }>();
 const emit = defineEmits<{
 	"update:modelValue": [value: string];

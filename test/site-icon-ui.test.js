@@ -48,7 +48,7 @@ test('真实 HTML 中所有浏览器与触屏图标同步切换，清除后恢�
       }
     }
     applySiteMetadata({ siteIconUrl: '' });
-    assert.equal(document.title, 'Edgechat');
+    assert.equal(document.title, 'SlimChat');
     assert.deepEqual(document.links.map(link => link.attributes), defaults);
   } finally { globalThis.document = previous; }
 });

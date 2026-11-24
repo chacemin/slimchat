@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import initSqlJs from "sql.js";
-import { createSession, hashPassword } from "../worker/src/auth.js";
-import worker from "../worker/src/index.js";
+import { createSession, hashPassword } from "../server/src/auth.js";
+import worker from "../server/src/index.js";
 import { createD1Adapter, createKvAdapter } from "./support/d1.js";
 
 const SQL = await initSqlJs();
-const schema = readFileSync(new URL("../worker/schema.sql", import.meta.url), "utf8");
+const schema = readFileSync(new URL("../server/db/schema.sql", import.meta.url), "utf8");
 const password = await hashPassword("password");
 
 async function harness() {

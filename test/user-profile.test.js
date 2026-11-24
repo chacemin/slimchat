@@ -2,15 +2,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import initSqlJs from "sql.js";
-import { createSession, hashPassword } from "../worker/src/auth.js";
-import worker from "../worker/src/index.js";
-import { D1_MIGRATIONS } from "../.github/scripts/d1-migration-manifest.mjs";
-import { buildD1MigrationPlan } from "../.github/scripts/d1-migration-plan.mjs";
+import { createSession, hashPassword } from "../server/src/auth.js";
+import worker from "../server/src/index.js";
 import { bioLength, validateBio } from "../shared/user-profile.ts";
 import { createD1Adapter, createKvAdapter } from "./support/d1.js";
 
 const SQL = await initSqlJs();
-const schema = readFileSync(new URL("../worker/schema.sql", import.meta.url), "utf8");
+const schema = readFileSync(new URL("../server/db/schema.sql", import.meta.url), "utf8");
 const password = await hashPassword("password");
 
 async function harness() {
@@ -154,27 +152,3 @@ test("资料写入内部异常在 Web/v1 均隐藏堆栈和 SQL 细节", async (
 	}
 });
 
-test("用户简介新安装、旧库升级与重复迁移规划保持数据", async () => {
-	const migration = D1_MIGRATIONS.find((item) => item.id === "2026-09-12-user-bio");
-	for (const fresh of [false, true]) {
-		const database = new SQL.Database();
-		database.exec(fresh ? schema : schema.replace(/ {2}bio TEXT NOT NULL DEFAULT '',\r?\n/, ""));
-		database.run("INSERT INTO users (username, display_name, password_hash, password_salt) VALUES ('legacy', 'Legacy', 'hash', 'salt')");
-		const options = {
-			migrations: [migration], appliedMigrations: new Map(),
-			artifacts: new Set(fresh ? ["column:users.bio"] : []),
-			readSql: (file) => readFileSync(new URL(`../${file}`, import.meta.url), "utf8"),
-		};
-		const first = await buildD1MigrationPlan(options);
-		assert.equal(first.decisions[0].action, fresh ? "baseline" : "apply");
-		database.exec(first.sql);
-		assert.equal(database.exec("SELECT bio FROM users")[0].values[0][0], "");
-		database.run("UPDATE users SET bio = 'keep me'");
-		const ledger = new Map(database.exec("SELECT migration_id, checksum FROM edgechat_schema_migrations")[0].values);
-		const repeated = await buildD1MigrationPlan({ ...options, appliedMigrations: ledger, artifacts: new Set(["column:users.bio"]) });
-		assert.equal(repeated.decisions[0].action, "skip");
-		database.exec(repeated.sql);
-		assert.equal(database.exec("SELECT bio FROM users")[0].values[0][0], "keep me");
-		assert.equal(database.exec("SELECT display_name FROM users")[0].values[0][0], "Legacy");
-	}
-});

@@ -4,17 +4,17 @@ import test from "node:test";
 import { Hono } from "hono";
 import initSqlJs from "sql.js";
 
-import { registerChannelRoutes } from "../worker/src/api/channels.js";
-import { hardDeleteChannel } from "../worker/src/data/channel-deletion.ts";
-import { ApiError } from "../worker/src/errors.js";
-import { runScheduledGc } from "../worker/src/gc.js";
+import { registerChannelRoutes } from "../server/src/api/channels.js";
+import { hardDeleteChannel } from "../server/src/data/channel-deletion.ts";
+import { ApiError } from "../server/src/errors.js";
+import { runScheduledGc } from "../server/src/gc.js";
 import { createD1Adapter } from "./support/d1.js";
 
 const SQL = await initSqlJs();
 
 function createHarness(isAdmin = false) {
 	const database = new SQL.Database();
-	database.exec(readFileSync(new URL("../worker/schema.sql", import.meta.url), "utf8"));
+	database.exec(readFileSync(new URL("../server/db/schema.sql", import.meta.url), "utf8"));
 	database.run(
 		`INSERT INTO users (id, username, display_name, password_hash, password_salt)
 		 VALUES (1, 'owner', 'Owner', 'hash', 'salt'), (2, 'member', 'Member', 'hash', 'salt')`,
@@ -72,8 +72,7 @@ function addRelatedRecords(database, id) {
 	database.run("INSERT INTO message_reads (channel_id, user_id, last_read_message_id) VALUES (?, 2, ?)", [id, messageId]);
 	database.run("INSERT INTO channel_pins (channel_id, message_id, pinned_by) VALUES (?, ?, 1)", [id, messageId]);
 	database.run("INSERT INTO message_event_compaction (channel_id, compacted_through) VALUES (?, 1)", [id]);
-	database.run("INSERT INTO telegram_mappings (channel_id, telegram_chat_id) VALUES (?, '-123')", [id]);
-}
+	}
 
 for (const kind of ["public", "private"]) {
 	for (const admin of [false, true]) {
@@ -89,7 +88,7 @@ for (const kind of ["public", "private"]) {
 			const path = admin ? `/api/admin/channels/${id}` : `/api/channels/${id}`;
 			assert.equal((await harness.request(path, "DELETE")).status, 200);
 			assert.equal(count(database, "channels", `id = ${id}`), 0);
-			for (const table of ["messages", "channel_members", "message_reads", "channel_pins", "message_events", "message_event_compaction", "telegram_mappings"]) {
+			for (const table of ["messages", "channel_members", "message_reads", "channel_pins", "message_events", "message_event_compaction"]) {
 				assert.equal(count(database, table, `channel_id = ${id}`), 0, table);
 			}
 			assert.equal(count(database, "pending_r2_delete"), 2);

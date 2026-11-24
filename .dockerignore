@@ -1,0 +1,15 @@
+.git
+.env
+node_modules
+data
+frontend/dist
+frontend/public/vendor/vditor
+test
+docs
+assets
+Edgechat.jpg
+capacitor/android/.gradle
+capacitor/android/.kotlin
+capacitor/android/**/build
+*.log
+.DS_Store

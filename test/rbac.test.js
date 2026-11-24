@@ -2,19 +2,16 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import test from 'node:test';
 import initSqlJs from 'sql.js';
-import worker from '../worker/src/index.js';
-import { createSession, hashPassword } from '../worker/src/auth.js';
-import { getUserByUsername } from '../worker/src/data/users.js';
+import worker from '../server/src/index.js';
+import { createSession, hashPassword } from '../server/src/auth.js';
+import { getUserByUsername } from '../server/src/data/users.js';
 import { ADMIN_PERMISSIONS, PERMISSION_KEYS, togglePermission } from '../shared/admin-permissions.ts';
-import { resolvePolicy } from '../worker/src/rbac/policies.ts';
-import { runAuthorizedBatch, readAuthorization, authorizedDatabase } from '../worker/src/rbac/authorization.ts';
-import { authorizeRoom, authorizeChannelManagement } from '../worker/src/room-access.js';
+import { resolvePolicy } from '../server/src/rbac/policies.ts';
+import { runAuthorizedBatch, readAuthorization, authorizedDatabase } from '../server/src/rbac/authorization.ts';
+import { authorizeRoom, authorizeChannelManagement } from '../server/src/room-access.js';
 import { createD1Adapter, createKvAdapter } from './support/d1.js';
-import { generateRecoverySql } from '../.github/scripts/generate-admin-recovery-sql.mjs';
-import { ChannelRoom } from '../worker/src/do/ChannelRoom.js';
-import { spawnSync } from 'node:child_process';
 const SQL = await initSqlJs();
-const schema = readFileSync(new URL('../worker/schema.sql', import.meta.url), 'utf8');
+const schema = readFileSync(new URL('../server/db/schema.sql', import.meta.url), 'utf8');
 const password = await hashPassword('test-password');
 async function harness() {
   const database = new SQL.Database(); database.exec(schema);
@@ -47,7 +44,7 @@ test('RBAC：只读子管理员、普通用户与仅用户权限的模块隔离'
   assert.equal(snapshot.isSuperAdmin, false); assert.equal(snapshot.canAccessAdmin, true); assert.deepEqual(snapshot.permissions, ['users.read']);
   assert.equal((await h.request('/admin/users', null, { token: h.delegate.token })).status, 200);
   assert.ok((await h.request('/admin/users', null, { token: h.delegate.token })).body.users.every((user) => !('permissions' in user)));
-  for (const path of ['/admin/overview', '/admin/site-settings', '/admin/register-links', '/admin/storage', '/admin/storage/scan', '/admin/telegram', '/admin/instance-bridge', '/admin/maintenance', '/admin/rbac/roles', '/admin/audit', '/admin/dms', '/admin/channels']) {
+  for (const path of ['/admin/overview', '/admin/site-settings', '/admin/register-links', '/admin/storage', '/admin/storage/scan', '/admin/maintenance', '/admin/rbac/roles', '/admin/audit', '/admin/dms', '/admin/channels']) {
     assert.equal((await h.request(path, null, { token: h.delegate.token })).status, 403, path);
     assert.equal((await h.request(path, null, { token: h.regular.token })).status, 403, path);
   }
@@ -65,7 +62,6 @@ test('RBAC：普通组不可修改、未知权限和缺少依赖拒绝、全选�
   assert.equal((await h.request(`/admin/rbac/roles/${role.id}`, null, { method: 'DELETE' })).status, 409);
   for (const path of ['/admin/rbac/roles', '/admin/stealth', '/admin/audit']) assert.equal((await h.request(path, null, { token: h.delegate.token })).status, 403);
   assert.equal((await h.request('/admin/users/3/reset-password', { password: 'takeover' }, { token: h.delegate.token })).status, 403);
-  assert.equal((await h.request('/admin/telegram/config', { botToken: 'not-a-token' }, { method: 'PUT', token: h.delegate.token })).status, 403);
   assert.throws(() => h.database.run("INSERT INTO rbac_role_permissions VALUES (1, 'users.read')"), /rbac_default_protected/);
   assert.deepEqual(togglePermission(['users.read', 'users.ban'], 'users.read', false), []);
 });
@@ -170,23 +166,23 @@ test('RBAC：后台身份不放行私有房间，缺少分组不会回退旧 is_
 });
 
 test('RBAC：所有后台路由均登记策略，新权限不会自动授予已有组', () => {
-  for (const file of readdirSync(new URL('../worker/src/api/', import.meta.url)).filter((name) => /\.(?:js|ts)$/.test(name))) {
-    const source = readFileSync(new URL(`../worker/src/api/${file}`, import.meta.url), 'utf8');
+  for (const file of readdirSync(new URL('../server/src/api/', import.meta.url)).filter((name) => /\.(?:js|ts)$/.test(name))) {
+    const source = readFileSync(new URL(`../server/src/api/${file}`, import.meta.url), 'utf8');
     for (const match of source.matchAll(/app\.(get|post|put|patch|delete)\(['"](\/api\/admin\/[^'"]+)['"]/g)) {
       const path = match[2].replace(/:[A-Za-z]+/g, '1');
       assert.ok(resolvePolicy(match[1].toUpperCase(), path, { displayName: 'a' }), `${file}: ${match[1]} ${path}`);
     }
   }
   assert.equal(resolvePolicy('GET', '/api/admin/undeclared'), null);
-  assert.equal(ADMIN_PERMISSIONS.length, 21);
+  assert.equal(ADMIN_PERMISSIONS.length, 17);
 });
 
 test('RBAC：旧实例一次性迁移保留管理员与普通用户，不解封或覆盖数据', async () => {
   const oldSchema = schema.slice(0, schema.indexOf('CREATE TABLE IF NOT EXISTS rbac_roles')) + schema.slice(schema.indexOf('-- 每个用户最多三次登录'));
-  const old = oldSchema.replace(/^  (is_super_admin|management_protected|authz_version) .*\r?\n/gm, '');
+  const old = oldSchema.replace(/^ {2}(is_super_admin|management_protected|authz_version) .*\r?\n/gm, '');
   const database = new SQL.Database(); database.exec(old);
   database.run("INSERT INTO users (username, display_name, password_hash, password_salt, is_admin, is_disabled) VALUES ('admin', 'admin', 'hash', 'salt', 1, 1), ('member', 'member', 'hash', 'salt', 0, 0)");
-  database.exec(readFileSync(new URL('../worker/migrations/2026-10-06-rbac.sql', import.meta.url), 'utf8'));
+  database.exec(readFileSync(new URL('../server/db/migrations/2026-10-06-rbac.sql', import.meta.url), 'utf8'));
   const db = createD1Adapter(database);
   assert.deepEqual((await db.prepare('SELECT is_super_admin, management_protected, is_disabled FROM users ORDER BY id').all()).results,
     [{ is_super_admin: 1, management_protected: 1, is_disabled: 1 }, { is_super_admin: 0, management_protected: 0, is_disabled: 0 }]);
@@ -204,25 +200,6 @@ test('RBAC：Cookie 同源、管理 query token 与授权基础设施失败', as
   h.env.DB = { prepare() { throw new Error('D1 offline details'); } };
   const result = await h.request('/admin/users');
   assert.equal(result.status, 503); assert.doesNotMatch(JSON.stringify(result.body), /offline details|stack/);
-});
-
-test('RBAC：桥接候选、映射 ID 与写事务采用同一群主范围', async () => {
-  const h = await harness(); await h.grant(['telegram.read', 'telegram.mappings.manage', 'instance_bridge.read', 'instance_bridge.manage']);
-  h.database.run("INSERT INTO channels (id, name, kind, created_by) VALUES (10, 'mine', 'private', 2), (11, 'other', 'private', 3)");
-  h.database.run("INSERT INTO channel_members (channel_id, user_id, role) VALUES (10, 2, 'owner'), (11, 3, 'owner')");
-  h.database.run("INSERT INTO telegram_mappings (channel_id, telegram_chat_id) VALUES (10, '-10'), (11, '-11')");
-  const delegate = { token: h.delegate.token };
-  const telegram = (await h.request('/admin/telegram', null, delegate)).body;
-  assert.deepEqual(telegram.channels.map((c) => c.id), [10]);
-  assert.deepEqual(telegram.mappings.map((m) => m.channelId), [10]);
-  assert.equal((await h.request('/admin/telegram/mappings/2', { enabled: false }, { ...delegate, method: 'PATCH' })).status, 403);
-  assert.equal((await h.request('/admin/telegram/mappings/1', { enabled: false }, { ...delegate, method: 'PATCH' })).status, 200);
-  assert.deepEqual((await h.request('/admin/instance-bridge', null, delegate)).body.channels.map((c) => c.id), [10]);
-  assert.equal((await h.request('/admin/instance-bridge/invitations', { channelId: 11 }, delegate)).status, 403);
-  const context = { session: h.delegate, policy: resolvePolicy('PATCH', '/api/admin/telegram/mappings/1', { enabled: true }), target: 1 };
-  h.database.run("UPDATE channel_members SET role = 'member' WHERE channel_id = 10 AND user_id = 2");
-  await assert.rejects(() => runAuthorizedBatch(h.env.DB, context, [h.env.DB.prepare('UPDATE telegram_mappings SET enabled = 1 WHERE id = 1')]), (e) => e.status === 403);
-  assert.equal((await h.env.DB.prepare('SELECT enabled FROM telegram_mappings WHERE id = 1').first()).enabled, 0);
 });
 
 test('RBAC：存储只读快照、扫描限速与撤权后继续扫描拒绝', async () => {
@@ -244,7 +221,9 @@ test('RBAC：存储只读快照、扫描限速与撤权后继续扫描拒绝', a
 
 test('RBAC：显式恢复使旧会话失效并保留普通组，审计渐进限量清理', async () => {
   const h = await harness(); await h.grant();
-  h.database.exec(await generateRecoverySql(2, 'replacement-password'));
+  const recovery = await hashPassword('replacement-password');
+  h.database.run('UPDATE users SET is_super_admin = 1, session_version = session_version + 1, authz_version = authz_version + 1, password_hash = ?, password_salt = ? WHERE id = 2', [recovery.hash, recovery.salt]);
+  h.database.run('UPDATE rbac_user_roles SET role_id = 1 WHERE user_id = 2');
   const user = await h.env.DB.prepare('SELECT is_super_admin, session_version, authz_version FROM users WHERE id = 2').first();
   assert.equal(user.is_super_admin, 1); assert.equal(user.session_version, 1); assert.equal(user.authz_version, 2);
   assert.equal((await h.env.DB.prepare('SELECT role_id FROM rbac_user_roles WHERE user_id = 2').first()).role_id, 1);
@@ -256,26 +235,3 @@ test('RBAC：显式恢复使旧会话失效并保留普通组，审计渐进限�
   assert.equal((await h.env.DB.prepare('SELECT COUNT(*) AS n FROM admin_audit_log').first()).n, 9901);
 });
 
-test('RBAC：升级前休眠连接不继承 isAdmin 快照，公开 verified 头不能绕过成员边界', async () => {
-  const h = await harness();
-  h.database.run("INSERT INTO channels (id, name, kind, created_by) VALUES (10, 'secret', 'private', 3)");
-  h.database.run("INSERT INTO channel_members (channel_id, user_id, role) VALUES (10, 3, 'owner')");
-  const legacy = { token: h.root.token, userId: 1, isAdmin: true, room: { kind: 'private', id: 10 } };
-  const socket = { packets: [], closed: null, deserializeAttachment: () => legacy, serializeAttachment() {}, send(packet) { this.packets.push(packet); }, close(code) { this.closed = code; } };
-  const room = new ChannelRoom({ getWebSockets: () => [socket] }, h.env);
-  await room.broadcast(JSON.stringify({ type: 'secret_message' }));
-  assert.equal(socket.closed, 1008); assert.deepEqual(socket.packets, []);
-  const result = await h.request('/messages?kind=private&roomId=10', null, { headers: { 'x-cfchat-internal-auth': 'worker-verified', 'x-cfchat-verified-user-id': '3', 'x-cfchat-verified-is-admin': '1' } });
-  assert.equal(result.status, 403);
-});
-
-test('RBAC：重复初始化不提升、解封、重设密码或覆盖已有分组', async () => {
-  const h = await harness(); const role = await h.grant();
-  const before = await h.env.DB.prepare('SELECT * FROM users WHERE id = 2').first();
-  const result = spawnSync(process.execPath, ['.github/scripts/generate-admin-bootstrap-sql.mjs'], { cwd: new URL('..', import.meta.url), env: { ...process.env,
-    EDGECHAT_ADMIN_USERNAME: 'delegate', EDGECHAT_ADMIN_PASSWORD: 'must-not-replace', EDGECHAT_ADMIN_DISPLAY_NAME: 'must-not-replace' }, windowsHide: true });
-  assert.equal(result.status, 0, result.stderr?.toString());
-  h.database.exec(readFileSync(new URL('../.tmp/edgechat-admin-upsert.sql', import.meta.url), 'utf8'));
-  assert.deepEqual(await h.env.DB.prepare('SELECT * FROM users WHERE id = 2').first(), before);
-  assert.equal((await h.env.DB.prepare('SELECT role_id FROM rbac_user_roles WHERE user_id = 2').first()).role_id, role.id);
-});
