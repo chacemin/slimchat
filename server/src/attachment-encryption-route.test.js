@@ -44,7 +44,7 @@ function fileDb({ accessible, metadata = true }) {
   };
 }
 
-test('attachment upload reports when the deployment has no R2 binding', async () => {
+test('attachment upload reports when local storage is unavailable', async () => {
   const app = new Hono();
   app.use('/api/*', async (c, next) => {
     c.set('session', { userId: 42 });
@@ -65,7 +65,7 @@ test('attachment upload reports when the deployment has no R2 binding', async ()
 
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), {
-    error: '当前部署没有绑定 R2，无法上传附件'
+    error: '本地附件存储不可用'
   });
 });
 
@@ -74,16 +74,13 @@ test('authorized attachment download decrypts bytes and disables shared caching'
   const plaintext = Uint8Array.from([1, 2, 3, 4]);
   const ciphertext = await encryptAttachment(keyring, plaintext, objectKey);
   const object = {
-    uploaded: new Date('2026-08-10T00:00:00Z'),
-    customMetadata: {},
+    lastModified: Date.parse('2026-08-10T00:00:00Z'),
+    async exists() { return true; },
     async arrayBuffer() {
       return ciphertext.buffer;
-    },
-    writeHttpMetadata(headers) {
-      headers.set('content-type', 'application/octet-stream');
-      headers.set('cache-control', 'public, max-age=31536000');
     }
   };
+  let storageRead = false;
   const app = new Hono();
   registerUploadRoutes(app);
 
@@ -94,22 +91,24 @@ test('authorized attachment download decrypts bytes and disables shared caching'
       DB: fileDb({ accessible: true }),
       SESSIONS: sessions,
       FILES: {
-        async get() {
+        get() {
+          storageRead = true;
           return object;
         }
       },
-      EDGECHAT_ENCRYPTION_KEYRING: keyring
+      ENCRYPTION_KEYRING: keyring
     }
   );
 
   assert.equal(response.status, 200);
+  assert.equal(storageRead, true);
   assert.deepEqual(new Uint8Array(await response.arrayBuffer()), plaintext);
   assert.equal(response.headers.get('cache-control'), 'private, no-store');
   assert.match(response.headers.get('content-disposition'), /%E6%8A%A5%E5%91%8A\.bin/);
 });
 
-test('unauthorized attachment download is rejected before reading R2', async () => {
-  let r2Read = false;
+test('unauthorized attachment download is rejected before reading storage', async () => {
+  let storageRead = false;
   const app = new Hono();
   registerUploadRoutes(app);
 
@@ -119,20 +118,20 @@ test('unauthorized attachment download is rejected before reading R2', async () 
     {
       DB: fileDb({ accessible: false }),
       FILES: {
-        async get() {
-          r2Read = true;
+        get() {
+          storageRead = true;
           return null;
         }
       },
-      EDGECHAT_ENCRYPTION_KEYRING: keyring
+      ENCRYPTION_KEYRING: keyring
     }
   );
 
   assert.equal(response.status, 403);
-  assert.equal(r2Read, false);
+  assert.equal(storageRead, false);
 });
 
-test('authorized attachment download reports when the deployment has no R2 binding', async () => {
+test('authorized attachment download reports when local storage is unavailable', async () => {
   const app = new Hono();
   registerUploadRoutes(app);
 
@@ -144,12 +143,12 @@ test('authorized attachment download reports when the deployment has no R2 bindi
 
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), {
-    error: '当前部署没有绑定 R2，无法读取附件'
+    error: '本地附件存储不可用'
   });
 });
 
-test('telegram attachment downloads through message authorization without uploaded file ownership', async () => {
-  const objectKey = 'telegram/-1001/9-example.jpg';
+test('attachment referenced by an accessible message downloads without an uploaded_files row', async () => {
+  const objectKey = '42/9-example.jpg';
   const plaintext = Uint8Array.from([5, 6, 7]);
   const ciphertext = await encryptAttachment(keyring, plaintext, objectKey);
   const app = new Hono();
@@ -162,24 +161,21 @@ test('telegram attachment downloads through message authorization without upload
       DB: fileDb({ accessible: true, metadata: false }),
       SESSIONS: sessions,
       FILES: {
-        async get() {
+        get() {
           return {
-            customMetadata: { filename: 'telegram-photo.jpg' },
+            lastModified: Date.now(),
+            async exists() { return true; },
             async arrayBuffer() {
               return ciphertext.buffer;
-            },
-            writeHttpMetadata(headers) {
-              headers.set('content-type', 'image/jpeg');
             }
           };
         }
       },
-      EDGECHAT_ENCRYPTION_KEYRING: keyring
+      ENCRYPTION_KEYRING: keyring
     }
   );
 
   assert.equal(response.status, 200);
   assert.deepEqual(new Uint8Array(await response.arrayBuffer()), plaintext);
-  assert.equal(response.headers.get('content-type'), 'image/jpeg');
-  assert.match(response.headers.get('content-disposition'), /telegram-photo\.jpg/);
+  assert.match(response.headers.get('content-disposition'), /9-example\.jpg/);
 });

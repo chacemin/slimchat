@@ -53,7 +53,7 @@ test('insertMessage stores ciphertext and returns plaintext to the caller', asyn
   };
 
   const saved = await insertMessage(
-    { DB: fakeDb, EDGECHAT_ENCRYPTION_KEYRING: testKeyring },
+    { DB: fakeDb, ENCRYPTION_KEYRING: testKeyring },
     { channelId: 7, senderId: 42, content: 'database plaintext', attachment: null }
   );
 

@@ -1,5 +1,4 @@
 import { getStealthSettings } from '../data/stealth-settings.ts';
-import { getLoginVerification } from '../data/login-verification.ts';
 import { validateSession } from '../session.js';
 import { cookieRequestAllowed, extractSessionToken } from '../session-cookie.ts';
 import { gatePage, notFound, privateHeaders, submitGate } from './gate.ts';
@@ -34,20 +33,6 @@ async function assets(request: Request, env, settings, authenticated?: boolean) 
   }));
 }
 
-async function integration(request: Request, env, ctx, dispatch) {
-  if (request.method !== 'POST') return null;
-  const path = new URL(request.url).pathname;
-  const telegram = path === '/api/integrations/telegram/webhook'
-    && request.headers.has('X-Telegram-Bot-Api-Secret-Token');
-  const bridge = path === '/api/integrations/instance-bridge/v1'
-    && request.headers.has('x-edgechat-signature');
-  if (!telegram && !bridge) return null;
-  const response = await dispatch(request, env, ctx);
-  // 协议自身先验证 secret/HMAC。桥接签名错误响应只可能在认证成功后生成，应保留供对端重试判定。
-  if (response.ok || (bridge && response.headers.has('x-edgechat-signature'))) return privateResponse(response);
-  return notFound();
-}
-
 export function createSiteEntry(dispatch) {
   return async (request: Request, env, ctx) => {
     try {
@@ -63,13 +48,11 @@ export function createSiteEntry(dispatch) {
       }
 
       if (path === settings.loginPath && request.method === 'POST') return await submitGate(request, env, settings);
-      const callback = await integration(request, env, ctx, dispatch);
-      if (callback) return callback;
       const token = extractSessionToken(request);
       const validation = token ? await validateSession(env, token) : { ok: false };
       if (!validation.ok) {
         if ((path === '/' || path === settings.loginPath) && ['GET', 'HEAD'].includes(request.method)) {
-          const response = gatePage(settings, false, 200, await getLoginVerification(env.DB));
+          const response = gatePage(settings, false, 200, Boolean(env.CONFIG?.loginGateEnabled));
           return request.method === 'HEAD' ? new Response(null, response) : response;
         }
         return notFound();

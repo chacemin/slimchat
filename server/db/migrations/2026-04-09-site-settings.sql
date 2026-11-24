@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS site_settings (
 );
 
 INSERT OR IGNORE INTO site_settings (setting_key, setting_value)
-VALUES ('site_name', 'Edgechat');
+VALUES ('site_name', 'SlimChat');
 
 INSERT OR IGNORE INTO site_settings (setting_key, setting_value)
 VALUES ('site_icon_url', '');

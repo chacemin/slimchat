@@ -41,7 +41,7 @@ export async function hardDeleteChannels(db: Database, channelIds: number[]) {
 			).bind(...ids, ...ids),
 		db.prepare(`DELETE FROM messages WHERE channel_id IN (${target})`).bind(...ids),
 		db.prepare(`DELETE FROM channel_members WHERE channel_id IN (${target})`).bind(...ids),
-		// 已读游标没有级联外键，必须先显式删除；置顶、同步事件和 Telegram 映射由外键级联。
+		// 已读游标没有级联外键，必须先显式删除；置顶与同步事件由外键级联。
 		db.prepare(`DELETE FROM message_reads WHERE channel_id IN (${target})`).bind(...ids),
 		db.prepare(`DELETE FROM channels WHERE id IN (${target})`).bind(...ids),
 	]);

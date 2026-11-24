@@ -1,39 +1,61 @@
-import { getLoginVerification } from './data/login-verification.ts';
 import { ApiError } from './errors.js';
+import { extractSessionToken } from './session-cookie.ts';
 
-export async function enforceRateLimit(binding, request: Request) {
-  // 原生计数留在 Cloudflare 边缘；未安装 binding 的本地测试不模拟数据库计数。
-  if (!binding) return;
-  const { success } = await binding.limit({ key: request.headers.get('CF-Connecting-IP') || 'local' });
-  if (!success) throw new ApiError('请求过于频繁，请稍后重试', 429, 'rate_limited');
+export function clientIp(request: Request, trustProxy = false) {
+  if (trustProxy) {
+    const forwarded = request.headers.get('x-forwarded-for') || '';
+    const first = forwarded.split(',')[0]?.trim();
+    if (first) return first;
+    const real = request.headers.get('x-real-ip');
+    if (real) return real.trim();
+  }
+  return 'local';
 }
 
-export async function verifyLoginSecurity(env, request: Request, token: unknown) {
-  await enforceRateLimit(env.LOGIN_RATE_LIMITER, request);
-  const settings = await getLoginVerification(env.DB);
-  if (!settings.enabled) return;
-  if (!env.EDGECHAT_TURNSTILE_SECRET_KEY || !settings.siteKey) {
-    throw new ApiError('登录验证暂不可用', 503, 'verification_unavailable');
+function constantTimeEqual(left: string, right: string) {
+  const a = new TextEncoder().encode(String(left || ''));
+  const b = new TextEncoder().encode(String(right || ''));
+  let difference = a.length ^ b.length;
+  for (let index = 0; index < a.length; index += 1) {
+    difference |= a[index] ^ (b[index] ?? 0);
   }
-  if (typeof token !== 'string' || !token) {
-    throw new ApiError('请完成登录验证', 403, 'verification_required');
+  return difference === 0;
+}
+
+/** Per-session API sliding window (falls back to client IP for unauthenticated calls). */
+export async function enforceRateLimit(env, request: Request) {
+  if (!env.RATE_LIMITER?.apiLimit) return;
+  const token = extractSessionToken(request);
+  const key = token ? `session:${token.slice(0, 16)}` : `ip:${clientIp(request, env.CONFIG?.trustProxy)}`;
+  await env.RATE_LIMITER.apiLimit(key, env.CONFIG?.apiLimit);
+}
+
+/**
+ * Local access gate. The optional gate is a password from
+ * .env, never a network challenge, and all attempts are rate limited + logged.
+ */
+export async function verifyLoginSecurity(env, request: Request, payload: any = {}) {
+  const ip = clientIp(request, env.CONFIG?.trustProxy);
+  await env.RATE_LIMITER?.loginLimit?.(ip, payload?.username);
+
+  const gateEnabled = Boolean(env.CONFIG?.loginGateEnabled);
+  if (!gateEnabled) return;
+
+  const expected = env.CONFIG?.loginGatePassword || '';
+  const provided = String(payload?.loginGate || '');
+  if (!expected) {
+    throw new ApiError('访问口令尚未配置，请联系管理员', 503, 'gate_unavailable');
   }
-  let result: { success: boolean; action?: string };
-  try {
-    const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ secret: env.EDGECHAT_TURNSTILE_SECRET_KEY, response: token,
-        remoteip: request.headers.get('CF-Connecting-IP') || undefined }),
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!response.ok) throw new Error('Siteverify unavailable');
-    result = await response.json();
-  } catch {
-    throw new ApiError('登录验证暂不可用', 503, 'verification_unavailable');
+  // Changing the configured password invalidates every stale client immediately.
+  if (!constantTimeEqual(provided, expected)) {
+    await env.RATE_LIMITER?.recordLoginFailure?.(ip, payload?.username);
+    throw new ApiError('访问口令不正确', 401, 'gate_required');
   }
-  // 每次密码提交均消费一次短效 token；失败时不查询账号，也不写尝试次数。
-  if (!result.success || result.action !== 'login') {
-    throw new ApiError('登录验证失败，请重试', 403, 'verification_failed');
-  }
+}
+
+export async function recordLoginFailure(env, request: Request, username: string) {
+  await env.RATE_LIMITER?.recordLoginFailure?.(
+    clientIp(request, env.CONFIG?.trustProxy),
+    String(username || '')
+  );
 }

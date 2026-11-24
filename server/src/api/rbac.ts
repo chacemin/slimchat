@@ -2,7 +2,7 @@ import { ADMIN_PERMISSIONS, validatePermissions } from '../../../shared/admin-pe
 import { runAuthorizedBatch, readAuthorization } from '../rbac/authorization.ts';
 import { ApiError } from '../errors.js';
 import { parseJsonRequest } from '../utils.js';
-import { notifyUserInbox } from '../do-bridge.js';
+import { notifyUserInbox } from '../../realtime/bridge.ts';
 
 function page(c) {
   const offset = Number(c.req.query('offset') || 0);
@@ -20,7 +20,6 @@ function groupInput(data) {
   return { name, description, permissions: [...new Set<string>(data.permissions)] };
 }
 async function changed(c, userId: number) {
-  if (!c.env.USER_INBOX) return;
   try { await notifyUserInbox(c.env, userId, { type: 'authorization_changed' }); }
   catch { console.error('authorization_notification_failed'); }
 }
@@ -67,7 +66,7 @@ export function registerRbacRoutes(app) {
     ], { sql: 'EXISTS (SELECT 1 FROM rbac_roles WHERE id = ? AND revision = ?)', params: [id, expected] }, { before: { name: before?.name, enabled: before?.enabled }, after: { ...input, enabled: data.enabled } });
     // 大组不逐个唤醒闲置 DO；通知有限批，其他会话在前台恢复与请求拒绝时刷新，服务端仍即时撤权。
     const { results } = await db.prepare('SELECT user_id FROM rbac_user_roles WHERE role_id = ? LIMIT 100').bind(id).all();
-    c.executionCtx.waitUntil(Promise.all(results.map((u) => changed(c, u.user_id))));
+    void Promise.all(results.map((u) => changed(c, u.user_id)));
     return c.json({ ok: true });
   });
   app.delete('/api/admin/rbac/roles/:id', async (c) => {
@@ -96,10 +95,9 @@ export function registerRbacRoutes(app) {
       db.prepare('UPDATE users SET management_protected = CASE WHEN ? != 1 THEN 1 ELSE management_protected END, authz_version = authz_version + 1 WHERE id = ?').bind(roleId, userId),
     ], { sql: `EXISTS (SELECT 1 FROM users WHERE id = ? AND is_super_admin = 0 AND authz_version = ?)
       AND EXISTS (SELECT 1 FROM rbac_roles WHERE id = ?)`, params: [userId, expected, roleId] }, { roleId });
-    c.executionCtx.waitUntil(changed(c, userId));
+    void changed(c, userId);
     const { results: invitations } = await db.prepare('SELECT id, note FROM registration_invites WHERE created_by = ? AND deleted_at IS NULL AND used_count < max_uses LIMIT 100').bind(userId).all();
-    const { results: bridges } = await db.prepare("SELECT id, channel_name FROM instance_bindings WHERE created_by = ? AND status != 'revoked' LIMIT 100").bind(userId).all();
-    return c.json({ ok: true, remainingResources: { invitations, bridges }, authorization: await readAuthorization(db, userId) });
+    return c.json({ ok: true, remainingResources: { invitations }, authorization: await readAuthorization(db, userId) });
   });
   app.post('/api/admin/rbac/users/:id/unprotect', async (c) => {
     const id = Number(c.req.param('id'));

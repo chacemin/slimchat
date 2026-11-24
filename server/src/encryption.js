@@ -46,11 +46,12 @@ function getKeyringSource(source) {
     };
   }
 
-  const legacyRaw = String(source?.EDGECHAT_ENCRYPTION_KEYRING || '');
-  const activeKeyId = String(source?.EDGECHAT_ENCRYPTION_ACTIVE_KEY_ID || '');
+  // 本地密钥环文件内容由 createEnv() 以 ENCRYPTION_KEYRING 注入，形状与原 Secret 一致。
+  const legacyRaw = String(source?.ENCRYPTION_KEYRING || '');
+  const activeKeyId = String(source?.ENCRYPTION_ACTIVE_KEY_ID || '');
   const generatedKeys = Object.entries(source || {})
     .map(([bindingName, value]) => {
-      const match = /^EDGECHAT_ENCRYPTION_KEY_(\d+)$/.exec(bindingName);
+      const match = /^ENCRYPTION_KEY_(\d+)$/.exec(bindingName);
       return match ? [`auto-v${Number(match[1])}`, String(value || '')] : null;
     })
     .filter(Boolean)
@@ -73,7 +74,7 @@ function parseLegacyKeyring(raw) {
   try {
     payload = JSON.parse(raw);
   } catch {
-    throw new Error('EDGECHAT_ENCRYPTION_KEYRING must be valid JSON');
+    throw new Error('ENCRYPTION_KEYRING must be valid JSON');
   }
 
   const activeKeyId = String(payload?.activeKeyId || '');
@@ -107,7 +108,7 @@ function addKey(keys, keyId, encodedKey) {
 export function loadEncryptionKeyring(source) {
   const keyringSource = getKeyringSource(source);
   if (!keyringSource.legacyRaw && keyringSource.generatedKeys.length === 0) {
-    throw new Error('EDGECHAT_ENCRYPTION_KEYRING is required');
+    throw new Error('ENCRYPTION_KEYRING is required (bun run keyring:init)');
   }
   if (keyringSource.cacheKey === cachedRawKeyring && cachedKeyring) {
     return cachedKeyring;

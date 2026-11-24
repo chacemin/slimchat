@@ -2,7 +2,6 @@ import type { StealthSettings } from '../data/stealth-settings.ts';
 import { loginWithPassword } from '../login.ts';
 import { sessionCookie } from '../session-cookie.ts';
 import { renderGate } from './appearance.ts';
-import { getLoginVerification, type LoginVerificationSettings } from '../data/login-verification.ts';
 import { verifyLoginSecurity } from '../login-security.ts';
 import { ApiError } from '../errors.js';
 
@@ -20,18 +19,17 @@ export function notFound() {
   });
 }
 
-export function gatePage(settings: StealthSettings, failed = false, status = 200, verification?: LoginVerificationSettings) {
+export function gatePage(settings: StealthSettings, failed = false, status = 200, gateRequired = false) {
   // Settings are initialized/persisted before rendering; never generate presentation per request.
   if (!settings.appearance) throw new Error('Missing gate appearance');
-  const nonce = crypto.randomUUID().replaceAll('-', '');
-  const html = renderGate({ ...settings, appearance: settings.appearance }, failed, verification?.enabled ? verification.siteKey : '', nonce);
+  const html = renderGate({ ...settings, appearance: settings.appearance }, failed, gateRequired);
   return new Response(html, {
     status,
     headers: {
       ...privateHeaders,
       'Content-Type': 'text/html; charset=utf-8',
       ...(status === 429 ? { 'Retry-After': '60' } : {}),
-      'Content-Security-Policy': `default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'${verification?.enabled ? `; script-src 'nonce-${nonce}' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src https://challenges.cloudflare.com` : ''}`,
+      'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
     },
   });
 }
@@ -62,21 +60,23 @@ async function readForm(request: Request) {
 
 export async function submitGate(request: Request, env, settings: StealthSettings) {
   if (request.headers.get('origin') !== new URL(request.url).origin) return notFound();
-  const verification = await getLoginVerification(env.DB);
   const form = await readForm(request);
   const username = form?.get('username')?.trim() || '';
   const password = form?.get('password') || '';
   if (!username || username.length > 100 || !password || password.length > 1024) {
-    return gatePage(settings, true, 400, verification);
+    return gatePage(settings, true, 400, Boolean(env.CONFIG?.loginGateEnabled));
   }
   try {
-    await verifyLoginSecurity(env, request, form?.get('cf-turnstile-response'));
+    await verifyLoginSecurity(env, request, {
+      username,
+      loginGate: form?.get('loginGate') || '',
+    });
   } catch (error) {
     if (!(error instanceof ApiError)) throw error;
-    return gatePage(settings, true, error.status, verification);
+    return gatePage(settings, true, error.status, Boolean(env.CONFIG?.loginGateEnabled));
   }
   const session = await loginWithPassword(env, username, password, request);
-  if (!session) return gatePage(settings, true, 401, verification);
+  if (!session) return gatePage(settings, true, 401, Boolean(env.CONFIG?.loginGateEnabled));
   return new Response(null, {
     status: 303,
     headers: { ...privateHeaders, Location: '/', 'Set-Cookie': sessionCookie(request, session.token) },

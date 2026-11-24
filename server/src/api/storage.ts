@@ -4,6 +4,9 @@ import { summarizeR2Objects } from '../storage-statistics.js';
 import { listStorageOwners } from '../data/users.js';
 import { getFileStorage } from '../storage/index.ts';
 
+// Paged scan state is process-local; a restart only asks the admin to scan again.
+const scanStates = new Map<string, { userId: number; state: any }>();
+
 export function registerStorageRoutes(app) {
   app.get('/api/admin/storage', async (c) => {
     const row = await c.env.DB.prepare("SELECT setting_value FROM site_settings WHERE setting_key = 'admin_storage_snapshot'").first();
@@ -11,11 +14,12 @@ export function registerStorageRoutes(app) {
   });
   app.post('/api/admin/storage/scan', async (c) => {
     const storage = getFileStorage(c.env);
-    if (!storage) throw new ApiError('当前部署没有绑定 R2，无法统计存储空间', 503);
+    if (!storage) throw new ApiError('本地文件存储不可用', 503);
+    const userId = c.get('session').userId;
     const cursor = c.req.query('cursor') || '';
-    const key = `storage-scan:${c.get('session').userId}`;
-    let state = cursor ? JSON.parse(await c.env.SESSIONS.get(key) || 'null') : null;
-    if (cursor && (!state || state.cursor !== cursor || state.pages >= 100)) throw new ApiError('扫描游标无效或超过单次扫描范围', 400);
+    const stored = cursor ? scanStates.get(cursor) : null;
+    let state = stored?.userId === userId ? stored.state : null;
+    if (cursor && (!state || state.pages >= 100)) throw new ApiError('扫描游标无效或超过单次扫描范围', 400);
     const db = c.get('authorizationDatabase');
     if (!cursor) {
       await runAuthorizedBatch(db, c.get('authorizationContext'), [], {
@@ -33,13 +37,17 @@ export function registerStorageRoutes(app) {
     }
     state.pages++;
     state.cursor = listed.truncated ? listed.cursor : null;
-    if (listed.truncated) await c.env.SESSIONS.put(key, JSON.stringify(state), { expirationTtl: 600 });
-    else {
+    let nextCursor = cursor;
+    if (listed.truncated) {
+      if (!nextCursor) nextCursor = crypto.randomUUID();
+      state.cursor = listed.cursor;
+      scanStates.set(nextCursor, { userId, state });
+    } else {
       const snapshot = { items: Object.values(state.items), users: state.users, scannedAt: new Date().toISOString() };
       await runAuthorizedBatch(db, c.get('authorizationContext'), [db.prepare(`INSERT INTO site_settings (setting_key, setting_value)
         VALUES ('admin_storage_snapshot', ?) ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value, updated_at = CURRENT_TIMESTAMP`).bind(JSON.stringify(snapshot))]);
-      await c.env.SESSIONS.delete(key);
+      if (cursor) scanStates.delete(cursor);
     }
-    return c.json({ items, users: cursor ? undefined : state.users, scannedObjects: listed.objects.length, truncated: listed.truncated, cursor: state.cursor });
+    return c.json({ items, users: cursor ? undefined : state.users, scannedObjects: listed.objects.length, truncated: listed.truncated, cursor: listed.truncated ? nextCursor : null });
   });
 }

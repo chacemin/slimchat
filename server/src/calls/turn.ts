@@ -1,25 +1,36 @@
-import { ApiError } from '../errors.js';
+import { CALL_STUN } from '../../../shared/voice-call.ts';
+import { createHmac } from 'node:crypto';
 
-export function turnConfigured(env): boolean {
-  return Boolean(env.EDGECHAT_TURN_KEY_ID && env.EDGECHAT_TURN_API_TOKEN);
+export function turnConfigured(env: any): boolean {
+  const cfg = env.CONFIG || {};
+  return Boolean(cfg.turnUrl && (cfg.turnSharedSecret || (cfg.turnUsername && cfg.turnCredential)));
 }
 
-export async function generateCallIceServers(env, fetcher = fetch) {
-  if (!turnConfigured(env)) throw new ApiError('TURN 尚未配置', 503);
-  const response = await fetcher(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(env.EDGECHAT_TURN_KEY_ID)}/credentials/generate-ice-servers`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${env.EDGECHAT_TURN_API_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ttl: 3600 }),
-    signal: AbortSignal.timeout(10_000)
-  });
-  if (!response.ok) throw new ApiError('TURN 暂时不可用', 503);
-  const payload = await response.json();
-  if (!Array.isArray(payload.iceServers)) throw new ApiError('TURN 暂时不可用', 503);
-  // 浏览器阻止端口 53，移除它可以避免无意义的候选连接超时。
-  const iceServers = payload.iceServers.map(server => ({
-    urls: (Array.isArray(server.urls) ? server.urls : [server.urls]).filter(url => typeof url === 'string' && !/:53(?:\?|$)/.test(url)),
-    ...(server.username ? { username: server.username, credential: server.credential } : {})
-  })).filter(server => server.urls.length);
-  if (!iceServers.some(server => server.urls.some(url => /^turns?:/.test(url)))) throw new ApiError('TURN 暂时不可用', 503);
+/**
+ * Local coturn credentials. Nothing leaves the machine: either static
+ * SLIMCHAT_TURN_* values or short-lived credentials derived from a shared secret.
+ */
+export async function generateCallIceServers(env: any) {
+  const cfg = env.CONFIG || {};
+  const iceServers: Array<{ urls: string; username?: string; credential?: string }> = [
+    ...CALL_STUN
+  ];
+  if (!turnConfigured(env)) return { iceServers };
+
+  let username = cfg.turnUsername || '';
+  let credential = cfg.turnCredential || '';
+  if (cfg.turnSharedSecret) {
+    const ttl = 3600;
+    const expiry = Math.floor(Date.now() / 1000) + ttl;
+    username = `${expiry}:slimchat`;
+    credential = createHmac('sha1', cfg.turnSharedSecret).update(username).digest('base64');
+  }
+  const urls = String(cfg.turnUrl || '')
+    .split(',')
+    .map((value: string) => value.trim())
+    .filter(Boolean);
+  for (const url of urls) {
+    iceServers.push({ urls: url, username, credential });
+  }
   return { iceServers };
 }

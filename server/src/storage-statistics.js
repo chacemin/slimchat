@@ -10,10 +10,6 @@ export function storageOwnerFromObjectKey(key) {
 		}
 	}
 
-	if (normalizedKey.startsWith("telegram/")) {
-		return { key: "system:telegram", type: "telegram", userId: null };
-	}
-
 	return { key: "system:unknown", type: "unknown", userId: null };
 }
 

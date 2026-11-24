@@ -9,7 +9,7 @@ export async function getSiteSettings(db) {
 		results.map((row) => [row.setting_key, row.setting_value]),
 	);
 	return {
-		siteName: String(map.site_name || "Edgechat"),
+		siteName: String(map.site_name || "SlimChat"),
 		siteIconUrl: siteIconUrlFromStored(map.site_icon_url),
 			colorTheme: normalizeSiteColorTheme(map.site_color_theme),
 	};
@@ -27,7 +27,7 @@ export async function updateSiteSettings(db, { siteName, siteIconUrl, colorTheme
 					 SET setting_value = excluded.setting_value,
 					     updated_at = CURRENT_TIMESTAMP`,
 				)
-				.bind(String(siteName || "Edgechat").trim() || "Edgechat"),
+				.bind(String(siteName || "SlimChat").trim() || "SlimChat"),
 		);
 	}
 	if (siteIconUrl !== undefined) {

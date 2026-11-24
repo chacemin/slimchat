@@ -53,10 +53,8 @@ export function policyAssertion(policy: Policy, session, target: string | number
         AND NOT EXISTS (SELECT 1 FROM rbac_user_roles tr JOIN rbac_role_permissions tp ON tp.role_id = tr.role_id WHERE tr.user_id = t.id))))`;
   } else if (policy.scope) {
     params.push(target);
-    const channel = policy.scope === 'group' ? '?' : policy.scope === 'telegram'
-      ? '(SELECT channel_id FROM telegram_mappings WHERE id = ?)' : '(SELECT channel_id FROM instance_bindings WHERE id = ?)';
     scope = `(u.is_super_admin = 1 OR EXISTS (SELECT 1 FROM channel_members cm JOIN channels c ON c.id = cm.channel_id
-      WHERE cm.channel_id = ${channel} AND cm.user_id = u.id AND cm.role = 'owner' AND c.deleted_at IS NULL))`;
+      WHERE cm.channel_id = ? AND cm.user_id = u.id AND cm.role = 'owner' AND c.deleted_at IS NULL))`;
   }
   return { sql: `EXISTS (SELECT 1 FROM users u ${AUTHORIZATION_JOIN} WHERE u.id = ? AND u.session_version = ?
     AND u.deleted_at IS NULL AND u.is_disabled = 0 AND (u.disabled_until IS NULL OR u.disabled_until <= CURRENT_TIMESTAMP)

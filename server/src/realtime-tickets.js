@@ -1,5 +1,4 @@
 import { decryptSecretValue, encryptSecretValue } from './encryption.js';
-import { ApiError } from './errors.js';
 import { hashOpaqueToken } from './mobile-session.js';
 import { validateSession } from './session.js';
 import { randomToken } from './utils.js';
@@ -11,9 +10,6 @@ function ticketContext(tokenHash) {
 }
 
 export async function issueRealtimeTicket(env, session, target) {
-  if (!session?.deviceSessionId || session.sessionKind !== 'mobile') {
-    throw new ApiError('当前会话不支持实时票据', 400, 'mobile_session_required');
-  }
   const ticket = randomToken(32);
   const tokenHash = await hashOpaqueToken(ticket);
   const accessTokenCiphertext = await encryptSecretValue(
@@ -35,7 +31,7 @@ export async function issueRealtimeTicket(env, session, target) {
       tokenHash,
       accessTokenCiphertext,
       Number(session.userId),
-      String(session.deviceSessionId),
+      session.deviceSessionId ? String(session.deviceSessionId) : null,
       target.scope,
       target.roomKind || null,
       target.roomId || null,
@@ -72,7 +68,7 @@ export async function consumeRealtimeTicket(env, ticket) {
   if (
     !auth.ok ||
     Number(auth.session.userId) !== Number(row.user_id) ||
-    String(auth.session.deviceSessionId || '') !== String(row.device_session_id)
+    String(auth.session.deviceSessionId || '') !== String(row.device_session_id || '')
   ) {
     return null;
   }

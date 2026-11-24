@@ -73,9 +73,9 @@ test('versioned keyring decrypts old data after the active key rotates', async (
 test('incremental Worker Secrets add a new active key without replacing the legacy keyring', async () => {
   const legacyEnvelope = await encryptMessageContent(keyring('v1'), 'legacy keyring', messageContext);
   const incrementalEnv = {
-    EDGECHAT_ENCRYPTION_KEYRING: keyring('v1'),
-    EDGECHAT_ENCRYPTION_ACTIVE_KEY_ID: 'auto-v1',
-    EDGECHAT_ENCRYPTION_KEY_1: encodedKey(201)
+    ENCRYPTION_KEYRING: keyring('v1'),
+    ENCRYPTION_ACTIVE_KEY_ID: 'auto-v1',
+    ENCRYPTION_KEY_1: encodedKey(201)
   };
   const newEnvelope = await encryptMessageContent(incrementalEnv, 'incremental key', messageContext);
 

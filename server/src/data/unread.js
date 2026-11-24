@@ -69,7 +69,7 @@ export async function countUnreadAttention(db, { channelId, userId }) {
 	return Number(results[0]?.unread_count || 0);
 }
 
-// 协议沿用 mentionUnreadCount 兼容旧客户端，但计数语义与 Telegram 一致：同时覆盖提及和回复。
+// 协议沿用 mentionUnreadCount 兼容旧客户端，但计数语义与统一消息投影一致：同时覆盖提及和回复。
 export const countUnreadMentions = countUnreadAttention;
 
 export async function listRoomMemberIds(db, channelId) {

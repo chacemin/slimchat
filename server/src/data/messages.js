@@ -46,16 +46,13 @@ function mapReplyAttachment(row) {
 
 function mapReplySender(row) {
 	const isExternal = row.reply_sender_kind === "external";
-	const isTelegramExternal = isExternal && row.reply_source === "telegram";
 	return {
 		kind: isExternal ? "external" : "local",
 		id: isExternal ? String(row.reply_external_sender_id || "") : Number(row.reply_sender_id),
 		username: isExternal ? "" : row.reply_sender_username,
 		displayName: isExternal ? row.reply_external_sender_name : row.reply_sender_display_name,
 		avatarUrl: isExternal
-			? isTelegramExternal
-				? `/api/integrations/telegram/avatar/${row.reply_external_sender_id}`
-				: row.reply_external_sender_avatar_url || ""
+			? row.reply_external_sender_avatar_url || ""
 			: row.reply_sender_avatar_key
 				? publicFileUrl(row.reply_sender_avatar_key)
 				: "",
@@ -65,7 +62,6 @@ function mapReplySender(row) {
 
 export function mapMessage(row, content = row.content, replyTo = null) {
 	const isExternal = row.sender_kind === "external";
-	const isTelegramExternal = isExternal && row.source === "telegram";
 	const mentions = JSON.parse(row.mentions_json || "[]").map((mention) => ({
 		userId: Number(mention.userId),
 		username: mention.username,
@@ -77,9 +73,7 @@ export function mapMessage(row, content = row.content, replyTo = null) {
 		username: isExternal ? "" : row.sender_username,
 		displayName: isExternal ? row.external_sender_name : row.sender_display_name,
 		avatarUrl: isExternal
-			? isTelegramExternal
-				? `/api/integrations/telegram/avatar/${row.external_sender_id}`
-				: row.external_sender_avatar_url || ""
+			? row.external_sender_avatar_url || ""
 			: row.sender_avatar_key
 				? publicFileUrl(row.sender_avatar_key)
 				: "",
@@ -102,10 +96,6 @@ export function mapMessage(row, content = row.content, replyTo = null) {
 		sender,
 		attachment: mapAttachment(row),
 	};
-	if (row.source_instance) {
-		message.sourceInstance = row.source_instance;
-		message.sender.sourceInstance = row.source_instance;
-	}
 	if (row.client_message_id) {
 		message.clientMessageId = row.client_message_id;
 	}
@@ -169,7 +159,7 @@ async function mapDecryptedMessage(env, row) {
 }
 
 const MESSAGE_SELECT = `SELECT
-			  m.id, m.channel_id, m.content, m.attachment_key, m.attachment_name, m.attachment_type, m.source_instance,
+			  m.id, m.channel_id, m.content, m.attachment_key, m.attachment_name, m.attachment_type,
 		  m.attachment_size, m.attachment_kind, m.attachment_duration_ms, m.attachment_waveform,
 		  m.sender_kind, m.external_sender_id, m.external_sender_name,
 		  m.external_sender_avatar_url, m.source, m.source_message_id,
@@ -414,8 +404,6 @@ async function persistMessage(env, {
 	mentionUserIds = [],
 	replyToMessageId = null,
 	replyToSenderId = null,
-	bridgeDelivery = null,
-	sourceInstance = null,
 }) {
 	const isExternal = externalSender !== null;
 	const normalizedSenderId = isExternal ? null : Number(senderId);
@@ -467,9 +455,8 @@ async function persistMessage(env, {
 					   attachment_waveform, sender_kind, external_sender_id,
 						   external_sender_name, external_sender_avatar_url, source, source_message_id,
 						   source_attachment_id, source_attachment_unique_id, client_message_id,
-								   mention_user_ids, reply_to_message_id, reply_to_sender_id,
-								   bridge_binding_id, bridge_event_id, bridge_sent_at, source_instance, bridge_target_revision
-								 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+								   mention_user_ids, reply_to_message_id, reply_to_sender_id
+								 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				)
 			.bind(
 				Number(channelId),
@@ -498,11 +485,6 @@ async function persistMessage(env, {
 							storedMentionUserIds,
 							normalizedReplyToMessageId,
 								normalizedReplyToSenderId,
-								bridgeDelivery?.bindingId || null,
-								bridgeDelivery?.eventId || null,
-								bridgeDelivery?.createdAt || null,
-								sourceInstance,
-								bridgeDelivery?.targetRevision ?? null,
 						);
 		if (normalizedClientMessageId) {
 			// 原子批次省去写入后的远程回查；用唯一业务键定位，不依赖跨语句的 last_insert_rowid 状态。
@@ -515,12 +497,6 @@ async function persistMessage(env, {
 		const result = await insert.run();
 		return { message: await getMessageById(env, result.meta.last_row_id), created: true };
 		} catch (error) {
-			if (bridgeDelivery && String(error).includes("UNIQUE")) {
-				const receipt = await env.DB.prepare(
-					"SELECT 1 FROM bridge_receipts WHERE binding_id = ? AND event_id = ?",
-				).bind(bridgeDelivery.bindingId, bridgeDelivery.eventId).all();
-				if (receipt.results.length) return { message: null, created: false };
-			}
 		if (isR2ObjectUnavailableError(error)) {
 			throw new Error("Attachment is not available");
 		}
@@ -579,9 +555,5 @@ export async function insertMessage(env, {
 }
 
 export function insertMessageIdempotent(env, payload) {
-	return persistMessage(env, payload);
-}
-
-export function insertExternalMessage(env, payload) {
 	return persistMessage(env, payload);
 }

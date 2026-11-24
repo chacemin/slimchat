@@ -1,5 +1,5 @@
 export type Policy = { id: string; method: string; path: RegExp; permissions: string[]; superOnly?: boolean;
-  scope?: 'user' | 'group' | 'telegram' | 'bridge'; fields?: string[]; audit?: boolean };
+  scope?: 'user' | 'group'; fields?: string[]; audit?: boolean };
 function policy(id: string, method: string, path: string, permissions: string[], options: Partial<Policy> = {}): Policy {
   return { id, method, path: new RegExp(`^/api/admin/${path}$`), permissions, ...options };
 }
@@ -22,19 +22,8 @@ export const ADMIN_POLICIES = [
   policy('storage.read', 'GET', 'storage', ['storage.read']),
   policy('site.read', 'GET', 'site-settings', ['site.read']),
   policy('site.update', 'PATCH', 'site-settings', ['site.appearance.update'], { fields: ['siteName', 'siteIconUrl', 'colorTheme'], audit: true }),
-  policy('telegram.read', 'GET', 'telegram', ['telegram.read']),
-  policy('telegram.config', 'PUT', 'telegram/config', [], { superOnly: true, fields: ['botToken'], audit: true }),
-  policy('telegram.create', 'POST', 'telegram/mappings', ['telegram.mappings.manage'], { scope: 'group', fields: ['channelId', 'telegramChatId'], audit: true }),
-  policy('telegram.update', 'PATCH', 'telegram/mappings/([1-9]\\d*)', ['telegram.mappings.manage'], { scope: 'telegram', fields: ['enabled'], audit: true }),
-  policy('telegram.delete', 'DELETE', 'telegram/mappings/([1-9]\\d*)', ['telegram.mappings.manage'], { scope: 'telegram', audit: true }),
-  policy('bridge.read', 'GET', 'instance-bridge', ['instance_bridge.read']),
-  policy('bridge.create', 'POST', 'instance-bridge/invitations', ['instance_bridge.manage'], { scope: 'group', fields: ['channelId'], audit: true }),
-  policy('bridge.accept', 'POST', 'instance-bridge/accept', ['instance_bridge.manage'], { scope: 'group', fields: ['channelId', 'invitation'], audit: true }),
-  policy('bridge.action', 'POST', 'instance-bridge/([^/]+)/actions', ['instance_bridge.manage'], { scope: 'bridge', fields: ['action'], audit: true }),
   policy('maintenance.read', 'GET', 'maintenance', ['maintenance.read']),
   policy('stealth.read', 'GET', 'stealth', [], { superOnly: true }),
-  policy('login-verification.read', 'GET', 'login-verification', [], { superOnly: true }),
-  policy('login-verification.update', 'PUT', 'login-verification', [], { superOnly: true, fields: ['enabled', 'siteKey'], audit: true }),
   policy('stealth.update', 'PUT', 'stealth', [], { superOnly: true, fields: ['enabled'], audit: true }),
   policy('rbac.catalog', 'GET', 'rbac/permissions', [], { superOnly: true }),
   policy('rbac.list', 'GET', 'rbac/roles', [], { superOnly: true }),

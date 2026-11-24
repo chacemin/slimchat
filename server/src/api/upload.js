@@ -8,9 +8,20 @@ import { decryptAttachment, encryptAttachment } from '../encryption.js';
 import { normalizeContentType, sanitizeFilename } from '../attachment-metadata.js';
 import { validateSession } from '../session.js';
 import { errorResponse, requestBodyTooLarge } from '../utils.js';
+import { statfsSync } from 'node:fs';
 import { getFileStorage, hasFileStorage } from '../storage/index.ts';
 
 const FILE_RESPONSE_CACHE_CONTROL = 'private, no-store';
+const MIN_FREE_BYTES = 1024 * 1024 * 1024;
+
+function lowOnDisk(env) {
+  try {
+    const stats = statfsSync(env.CONFIG?.dataDir || '.');
+    return Number(stats.bavail) * Number(stats.bsize) < MIN_FREE_BYTES;
+  } catch {
+    return false;
+  }
+}
 const UPLOAD_BODY_OVERHEAD_BYTES = 1024 * 1024;
 const BLOCKED_MIME_TYPES = new Set([
   'text/html',
@@ -75,9 +86,12 @@ function validateUpload(env, file) {
 export function registerUploadRoutes(app) {
   app.post('/api/upload', async (c) => {
     if (!hasFileStorage(c.env)) {
-      return errorResponse('当前部署没有绑定 R2，无法上传附件', 503);
+      return errorResponse('本地附件存储不可用', 503);
     }
 
+    if (lowOnDisk(c.env)) {
+      return errorResponse('磁盘剩余空间不足 1GB，已暂停上传', 503);
+    }
     const session = c.get('session');
     const maxFileSize = Number(c.env.MAX_FILE_SIZE || 20971520);
     if (requestBodyTooLarge(c.req.raw, maxFileSize + UPLOAD_BODY_OVERHEAD_BYTES)) {
@@ -112,16 +126,15 @@ export function registerUploadRoutes(app) {
     if (!canRead) {
       return new Response('Forbidden', { status: 403 });
     }
-    const storage = getFileStorage(c.env);
-    if (!storage) {
-      return errorResponse('当前部署没有绑定 R2，无法读取附件', 503);
+    if (!hasFileStorage(c.env)) {
+      return errorResponse('本地附件存储不可用', 503);
     }
+    const storage = getFileStorage(c.env);
 
-    const [object, fileMetadata] = await Promise.all([
-      storage.get(key),
-      getUploadedFileMetadata(c.env.DB, key)
-    ]);
-    if (!object) {
+    const object = await storage.get(key);
+    const fileMetadata = await getUploadedFileMetadata(c.env.DB, key);
+    const exists = typeof object.exists === 'function' ? await object.exists() : true;
+    if (!exists) {
       return new Response('Not Found', { status: 404 });
     }
 
@@ -134,10 +147,9 @@ export function registerUploadRoutes(app) {
     }
 
     const headers = new Headers();
-    object.writeHttpMetadata(headers);
     headers.set('cache-control', FILE_RESPONSE_CACHE_CONTROL);
-    if (object.uploaded) {
-      headers.set('last-modified', object.uploaded.toUTCString());
+    if (Number.isFinite(Number(object.lastModified))) {
+      headers.set('last-modified', new Date(object.lastModified).toUTCString());
     }
 
     headers.set('x-content-type-options', 'nosniff');
@@ -156,7 +168,7 @@ export function registerUploadRoutes(app) {
     const dispositionKind =
       inlineAllowed && !contentType.startsWith('text/') ? 'inline' : 'attachment';
     const filename =
-      fileMetadata?.filename || object.customMetadata?.filename || key.split('/').pop() || 'file';
+      fileMetadata?.filename || key.split('/').pop() || 'file';
     headers.set('content-disposition', contentDispositionValue(dispositionKind, filename));
 
     return new Response(decrypted.bytes, { headers });
@@ -176,10 +188,7 @@ export async function saveUploadedFile(env, session, file, { clientUploadId = nu
   const filename = sanitizeFilename(file.name);
   const contentType = normalizeContentType(file.type) || 'application/octet-stream';
   const encryptedFile = await encryptAttachment(env, await file.arrayBuffer(), key);
-  await storage.put(key, encryptedFile, {
-    httpMetadata: { contentType, cacheControl: FILE_RESPONSE_CACHE_CONTROL },
-    customMetadata: { filename, edgechatEncryption: 'v1' }
-  });
+  await storage.put(key, encryptedFile);
 
   try {
     await recordUploadedFile(env.DB, {

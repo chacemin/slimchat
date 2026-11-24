@@ -57,10 +57,6 @@ export async function adminMiddleware(c, next) {
   c.set('authorizationContext', context);
   c.set('authorizationDatabase', c.env.DB);
   c.set('unrestrictedEnvironment', c.env);
-  if (['telegram.config', 'telegram.create'].includes(policy.id)) {
-    // 外部网络动作不属于 D1 事务；先持久接受意图，审计不记录凭据，后续网络结果允许独立失败。
-    await runAuthorizedBatch(c.env.DB, context, [], undefined, { phase: 'accepted' });
-  }
   if (method !== 'GET') c.env = { ...c.env, DB: authorizedDatabase(c.env.DB, context) };
   await next();
 }

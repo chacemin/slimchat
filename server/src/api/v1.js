@@ -1,6 +1,5 @@
 import { verifyPassword } from '../auth.js';
-import { verifyLoginSecurity } from '../login-security.ts';
-import { getLoginVerification } from '../data/login-verification.ts';
+import { recordLoginFailure, verifyLoginSecurity } from '../login-security.ts';
 import { saveUploadedFile } from './upload.js';
 import { hasFileStorage } from '../storage/index.ts';
 import {
@@ -11,11 +10,7 @@ import {
 import { getSiteSettings } from '../data/site-settings.js';
 import { getUserByUsername } from '../data/users.js';
 import { recordLoginInfo } from '../data/user-login-info.ts';
-import {
-  forwardInboxConnection,
-  forwardRoomConnection,
-  submitClientRoomAction
-} from '../do-bridge.js';
+import { submitClientRoomAction } from '../../realtime/bridge.ts';
 import { ApiError } from '../errors.js';
 import { authMiddleware } from '../middleware.js';
 import {
@@ -23,7 +18,7 @@ import {
   refreshMobileDeviceSession,
   revokeMobileDeviceSession
 } from '../mobile-session.js';
-import { issueRealtimeTicket, consumeRealtimeTicket } from '../realtime-tickets.js';
+import { issueRealtimeTicket } from '../realtime-tickets.js';
 import { authorizeRoom, isRoomKind } from '../room-access.js';
 import { markRoomRead } from '../data/unread.js';
 import { isUserDisabled } from '../user-status.js';
@@ -89,7 +84,7 @@ export function registerV1Routes(app) {
     return c.json({
       apiVersion: 1,
       site,
-      loginVerification: await getLoginVerification(c.env.DB),
+      loginVerification: { enabled: Boolean(c.env.CONFIG?.loginGateEnabled) },
       limits: {
         maxUploadBytes: Number(c.env.MAX_FILE_SIZE || 20971520),
         messageRetentionDays: Number(c.env.MESSAGE_RETENTION_DAYS || 30)
@@ -112,13 +107,14 @@ export function registerV1Routes(app) {
     if (!username || !password) {
       return v1ErrorResponse('invalid_credentials', '请输入用户名和密码', 400);
     }
-    await verifyLoginSecurity(c.env, c.req.raw, payload.turnstileToken);
+    await verifyLoginSecurity(c.env, c.req.raw, payload);
     const user = await getUserByUsername(c.env.DB, username);
     if (
       !user ||
       isUserDisabled(user) ||
       !(await verifyPassword(password, user.password_hash, user.password_salt))
     ) {
+      await recordLoginFailure(c.env, c.req.raw, username);
       return v1ErrorResponse('invalid_credentials', '账号或密码错误', 401);
     }
     const result = await createMobileDeviceSession(c.env, user, payload.device);
@@ -158,33 +154,6 @@ export function registerV1Routes(app) {
       return v1ErrorResponse('forbidden', '无权访问该会话', 403);
     }
     return c.json(await issueRealtimeTicket(c.env, session, { scope, roomKind, roomId }));
-  });
-
-  app.get('/api/v1/realtime/ws', async (c) => {
-    if (c.req.header('upgrade')?.toLowerCase() !== 'websocket') {
-      return v1ErrorResponse('websocket_required', '需要 WebSocket 连接', 426);
-    }
-    const redeemed = await consumeRealtimeTicket(c.env, c.req.query('ticket'));
-    if (!redeemed) {
-      return v1ErrorResponse('realtime_ticket_invalid', '实时票据无效或已过期', 401);
-    }
-    const url = new URL(c.req.url);
-    url.search = '';
-    const request = new Request(url.toString(), c.req.raw);
-    if (redeemed.scope === 'inbox') {
-      return forwardInboxConnection({
-        env: c.env,
-        request,
-        principal: redeemed.session
-      });
-    }
-    return forwardRoomConnection({
-      env: c.env,
-      request,
-      kind: redeemed.roomKind,
-      roomId: redeemed.roomId,
-      principal: redeemed.session
-    });
   });
 
   app.get('/api/v1/rooms/:kind/:id/messages', authMiddleware, async (c) => {
@@ -270,7 +239,7 @@ export function registerV1Routes(app) {
 
   app.post('/api/v1/uploads', authMiddleware, async (c) => {
     if (!hasFileStorage(c.env)) {
-      return v1ErrorResponse('attachments_unavailable', '当前部署没有绑定 R2，无法上传附件', 503);
+      return v1ErrorResponse('attachments_unavailable', '本地附件存储不可用', 503);
     }
     const maxFileSize = Number(c.env.MAX_FILE_SIZE || 20971520);
     if (requestBodyTooLarge(c.req.raw, maxFileSize + 1024 * 1024)) {
