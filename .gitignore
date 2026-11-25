@@ -1,0 +1,38 @@
+# Sensitive information
+.env
+.env.*
+!.env.example
+cf key.txt
+
+# Project documentation (not for GitHub)
+项目文档.md
+本地部署说明.md
+TECHNICAL.md
+导览.md
+
+# Dependencies
+node_modules/
+.DS_Store
+.openidea/
+AGENTS.md
+Agent.md
+frontend/dist/
+frontend/public/vendor/vditor/
+.playwright-cli/
+.tmp/
+release/
+
+# Runtime data: database, attachments, keyring and logs
+data/
+
+# 私有视频工程与输出，不随产品源码发布。
+/video/
+
+# Capacitor Android local/build outputs
+capacitor/android/.gradle/
+capacitor/android/.kotlin/
+capacitor/android/**/build/
+capacitor/android/local.properties
+capacitor/android/signing.properties
+capacitor/android/*.jks
+capacitor/android/*.keystore

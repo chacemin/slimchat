@@ -13,3 +13,5 @@ capacitor/android/.kotlin
 capacitor/android/**/build
 *.log
 .DS_Store
+
+release/

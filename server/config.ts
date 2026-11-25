@@ -1,4 +1,5 @@
-import { join, resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 
 function bool(value: string | undefined, fallback = false) {
   if (value === undefined || value === '') return fallback;
@@ -8,6 +9,48 @@ function bool(value: string | undefined, fallback = false) {
 function int(value: string | undefined, fallback: number) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : fallback;
+}
+
+function standalone() {
+  return Boolean((Bun as any).isStandaloneExecutable);
+}
+
+function executableDirectory() {
+  try {
+    return dirname(process.execPath);
+  } catch {
+    return process.cwd();
+  }
+}
+
+/** Load .env next to a standalone executable without overriding real environment variables. */
+function loadStandaloneDotEnv(baseDir: string) {
+  const path = join(baseDir, '.env');
+  if (!existsSync(path)) return;
+  let text = '';
+  try {
+    text = readFileSync(path, 'utf8');
+  } catch {
+    return;
+  }
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const match = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+    if (!match) continue;
+    const [, key, rawValue] = match;
+    if (process.env[key] !== undefined) continue;
+    let value = rawValue.trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    } else {
+      value = value.replace(/\s+#.*$/, '').trim();
+    }
+    process.env[key] = value;
+  }
 }
 
 export interface Config {
@@ -39,13 +82,24 @@ export interface Config {
   turnUsername: string;
   turnCredential: string;
   turnSharedSecret: string;
+  /** True when running from a `bun build --compile` executable. */
+  standalone: boolean;
+  /** Directory used to resolve relative paths (executable directory when standalone). */
+  baseDir: string;
   /** Legacy env shape exposed on c.env so existing modules stay unchanged. */
   vars: Record<string, string | number>;
 }
 
 export function loadConfig(): Config {
+  const standaloneBuild = standalone();
+  const baseDir = standaloneBuild ? executableDirectory() : process.cwd();
+  if (standaloneBuild) loadStandaloneDotEnv(baseDir);
+
   const env = process.env;
-  const dataDir = resolve(env.SLIMCHAT_DATA_DIR || './data');
+  const dataDirRaw = env.SLIMCHAT_DATA_DIR || (standaloneBuild ? 'data' : './data');
+  const dataDir = isAbsolute(dataDirRaw) ? resolve(dataDirRaw) : resolve(baseDir, dataDirRaw);
+  const keyringRaw = env.SLIMCHAT_KEYRING_FILE || join(dataDir, 'secrets', 'keyring.json');
+  const keyringFile = isAbsolute(keyringRaw) ? resolve(keyringRaw) : resolve(baseDir, keyringRaw);
   const publicOrigin = (env.SLIMCHAT_PUBLIC_ORIGIN || 'http://127.0.0.1:8787').replace(/\/+$/, '');
   const siteOrigins = (env.SLIMCHAT_SITE_ORIGINS || publicOrigin)
     .split(',')
@@ -60,7 +114,7 @@ export function loadConfig(): Config {
     dbPath: join(dataDir, 'slimchat.db'),
     filesDir: join(dataDir, 'files'),
     logDir: join(dataDir, 'logs'),
-    keyringFile: resolve(env.SLIMCHAT_KEYRING_FILE || join(dataDir, 'secrets', 'keyring.json')),
+    keyringFile,
     publicOrigin,
     trustProxy: bool(env.SLIMCHAT_TRUST_PROXY),
     adminUsername: env.SLIMCHAT_ADMIN_USERNAME || 'admin',
@@ -82,6 +136,8 @@ export function loadConfig(): Config {
     turnUsername: env.SLIMCHAT_TURN_USERNAME || '',
     turnCredential: env.SLIMCHAT_TURN_CREDENTIAL || '',
     turnSharedSecret: env.SLIMCHAT_TURN_SHARED_SECRET || '',
+    standalone: standaloneBuild,
+    baseDir,
     vars: {}
   };
 

@@ -2,7 +2,19 @@ import { existsSync } from 'node:fs';
 import { join, normalize, sep } from 'node:path';
 import type { Config } from './config.ts';
 
-const FRONTEND_DIST = normalize(join(import.meta.dir, '..', 'frontend', 'dist'));
+function resolveFrontendDist() {
+  const candidates = [
+    // Normal `bun server/index.ts` from the repository.
+    join(import.meta.dir, '..', 'frontend', 'dist'),
+    // `bun build --compile --asset frontend/dist ...`
+    join(import.meta.dir, 'dist'),
+    join(import.meta.dir, 'frontend', 'dist'),
+    join(import.meta.dir, '..', 'dist')
+  ];
+  return normalize(candidates.find((candidate) => existsSync(candidate)) || candidates[0]);
+}
+
+const FRONTEND_DIST = resolveFrontendDist();
 
 function fileResponse(path: string) {
   const file = Bun.file(path);
@@ -40,7 +52,12 @@ export async function serveAsset(request: Request, _config?: Config) {
   }
   const index = join(FRONTEND_DIST, 'index.html');
   if (existsSync(index)) return fileResponse(index);
-  return new Response('Frontend build not found. Run "bun run build" first.', { status: 404 });
+  return new Response(
+    (Bun as any).isStandaloneExecutable
+      ? 'Frontend assets are not embedded. Rebuild with --asset frontend/dist.'
+      : 'Frontend build not found. Run "bun run build" first.',
+    { status: 404 }
+  );
 }
 
 export function frontendDist() {

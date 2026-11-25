@@ -86,6 +86,74 @@ docker compose cp slimchat:/app/data/backups ./backups
 
 - 升级：`docker compose build --pull && docker compose up -d`；升级前先备份。
 
+## 单文件可执行（Windows / Linux）
+
+项目支持用 Bun 编译成单个可执行文件，目标机器不需要安装 Bun、Node、数据库或 Web 服务器。前端资源、`schema.sql` 和迁移文件都会嵌入可执行文件。
+
+```bash
+# 构建前端后编译
+bun run build:standalone:windows-x64
+bun run build:standalone:linux-x64
+bun run build:standalone:linux-arm64
+bun run build:standalone:darwin-x64
+bun run build:standalone:darwin-arm64
+```
+
+输出位于 `release/`：
+
+```text
+release/slimchat-windows-x64.exe
+release/slimchat-linux-x64
+release/slimchat-linux-arm64
+release/slimchat-darwin-x64
+release/slimchat-darwin-arm64
+```
+
+首次运行：
+
+```bash
+# Windows
+slimchat-windows-x64.exe
+
+# Linux
+./slimchat-linux-x64
+```
+
+首次启动会自动：
+
+- 在可执行文件同级创建 `data/`
+- 生成 `data/secrets/keyring.json`
+- 创建 SQLite 数据库并执行迁移
+- 如果设置了 `SLIMCHAT_ADMIN_PASSWORD`，自动创建首个管理员
+
+也可以显式初始化：
+
+```bash
+slimchat init
+SLIMCHAT_ADMIN_PASSWORD=change-me slimchat admin
+```
+
+内置命令：
+
+```text
+slimchat                    启动服务
+slimchat init               创建密钥环、建库迁移、按需创建管理员
+slimchat admin              创建首个管理员
+slimchat migrate            执行待应用迁移
+slimchat keyring:init       创建密钥环
+slimchat keyring:rotate     轮换密钥（保留旧密钥）
+slimchat backup             备份到 data/backups/<时间戳>/
+slimchat restore --from DIR 从备份恢复
+slimchat help               查看帮助
+```
+
+- 默认数据目录：可执行文件同级 `data/`；可用 `SLIMCHAT_DATA_DIR` 覆盖
+- 可在可执行文件旁放置 `.env`，启动时会自动读取；已存在的系统环境变量优先
+- Windows 如果放在 `Program Files` 等只读目录，请把 `SLIMCHAT_DATA_DIR` 指向 `%APPDATA%\SlimChat` 或可写目录
+- 可执行文件只对应一个平台/架构，Windows 和 Linux 需要分别编译
+- 备份时必须同时保留 `data/slimchat.db`、`data/files/`、`data/secrets/keyring.json`
+- 本地 coturn 和飞书 Webhook 仍是外部服务，按需配置；不安装也能运行核心聊天
+
 ## 数据与备份
 
 运行期数据全部位于 `data/`：
