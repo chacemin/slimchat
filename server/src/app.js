@@ -38,6 +38,7 @@ import { registerMessageRoutes } from './api/messages.js';
 import { registerUploadRoutes } from './api/upload.js';
 import { registerUserBlockRoutes } from './api/user-blocks.ts';
 import { registerUserProfileRoutes } from './api/user-profile.ts';
+import { registerFeishuRoutes } from './api/feishu.ts';
 import { registerV1Routes } from './api/v1.js';
 import { updateCurrentDeviceSessionVersion } from './mobile-session.js';
 import {
@@ -296,6 +297,7 @@ registerDmRoutes(app);
 registerCallRoutes(app);
 registerUserBlockRoutes(app);
 registerUserProfileRoutes(app);
+registerFeishuRoutes(app);
 registerUploadRoutes(app);
 registerChannelRoutes(app);
 registerAdminRoutes(app);

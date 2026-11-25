@@ -688,3 +688,12 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
   checksum TEXT NOT NULL DEFAULT '',
   applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- 每用户飞书 Webhook：仅在该用户没有任何在线客户端时投递私聊与群组 @ 提醒。
+CREATE TABLE IF NOT EXISTS user_feishu_webhooks (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  webhook_ciphertext TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

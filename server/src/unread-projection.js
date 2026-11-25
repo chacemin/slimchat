@@ -4,6 +4,7 @@ import {
 	listRoomMemberIds,
 } from "./data/unread.js";
 import { notifyUserInbox } from "../realtime/bridge.ts";
+import { notifyFeishuIfOffline } from "./integrations/feishu.ts";
 
 function logProjectionFailure(message, data) {
 	console.warn(JSON.stringify({ message, ...data }));
@@ -14,6 +15,7 @@ export function createUnreadProjection({
 	countMentions = countUnreadAttention,
 	listMemberIds = listRoomMemberIds,
 	notifyInbox = notifyUserInbox,
+	notifyFeishu = notifyFeishuIfOffline,
 	logFailure = logProjectionFailure,
 } = {}) {
 	async function notifyRecipient(env, room, message, userId, replyToSenderId, senderId) {
@@ -48,6 +50,15 @@ export function createUnreadProjection({
 				contentPreview: String(message.content || "").slice(0, 160),
 				sender: message.sender,
 			});
+			try {
+				await notifyFeishu(env, { userId, room, message });
+			} catch (error) {
+				logFailure("feishu notification failed", {
+					roomId: Number(room.id),
+					userId: Number(userId),
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
 		} catch (error) {
 			logFailure("unread recipient projection failed", {
 				roomId: Number(room.id),

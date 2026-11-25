@@ -39,6 +39,18 @@ bun run dev              # 后端 --watch
 bun run dev:frontend     # Vite 5173，代理 /api 与 /files 到 8787
 ```
 
+## 飞书通知
+
+每个用户可以在「设置 → 飞书通知」单独填写自己的飞书机器人 Webhook：
+
+- 仅接受 `https://open.feishu.cn/open-apis/bot/v2/hook/...`
+- 仅在该用户**没有任何客户端在线**时发送
+- 只发送**私聊消息**和**群组中 @ 该用户**的消息
+- **每一次私聊语音来电**都会给被叫方发送提醒（不受在线状态限制，避免漏接）
+- Webhook 使用现有密钥环加密保存；可在设置页发送测试消息
+
+公共群里的普通消息、回复和被拉黑的会话不会触发飞书提醒。
+
 ## Docker Compose
 
 仓库自带 `Dockerfile` 与 `docker-compose.yml`。首次启动会自动生成密钥环、建库迁移，并在提供了管理员密码时创建首个管理员。
@@ -51,6 +63,16 @@ docker compose up -d --build
 docker compose logs -f slimchat
 # http://127.0.0.1:8787
 ```
+
+国内网络默认使用 `docker.m.daocloud.io/oven/bun` 基础镜像和 `registry.npmmirror.com` 依赖源，避免 Docker Hub / npm 官方源无法访问。若你的网络环境不同，在 `.env` 中覆盖：
+
+```dotenv
+BUN_IMAGE=docker.m.daocloud.io/oven/bun
+BUN_VERSION=1.4.5
+NPM_REGISTRY=https://registry.npmmirror.com
+```
+
+海外网络可改为 `BUN_IMAGE=oven/bun`、`NPM_REGISTRY=https://registry.npmjs.org`。如果 DaoCloud 镜像也不可达，请先在 Docker 中配置可用的 registry mirror，或先把 `oven/bun:1.4.5` 拉取到本地后再构建。
 
 - 数据保存在命名卷 `slimchat-data`（容器内 `/app/data`），删除容器不会丢数据。
 - 宿主机默认只发布到 `127.0.0.1:8787`；局域网访问请设置 `SLIMCHAT_PUBLISH_ADDRESS=0.0.0.0`，同步修改 `SLIMCHAT_PUBLIC_ORIGIN` / `SLIMCHAT_SITE_ORIGINS`，并启用登录口令。

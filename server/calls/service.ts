@@ -8,6 +8,7 @@ import {
   type CallAction
 } from '../../shared/voice-call.ts';
 import { ApiError } from '../src/errors.js';
+import { notifyFeishuCall } from '../src/integrations/feishu.ts';
 
 interface Lease {
   callId: string;
@@ -22,6 +23,24 @@ export class CallService {
   private calls = new Map<number, CallState>();
   private leases = new Map<number, Lease>();
   private queue: Promise<unknown> = Promise.resolve();
+
+  constructor(
+    private deps: { notifyCall?: typeof notifyFeishuCall } = {}
+  ) {}
+
+  private notifyCall(env: any, call: CallState, callerName?: string) {
+    const notify = this.deps.notifyCall || notifyFeishuCall;
+    void notify(env, { userId: call.calleeId, callerName, roomId: call.roomId }).catch((error) => {
+      console.warn(
+        JSON.stringify({
+          message: 'feishu call notification failed',
+          roomId: Number(call.roomId),
+          userId: Number(call.calleeId),
+          error: error instanceof Error ? error.message : String(error)
+        })
+      );
+    });
+  }
 
   private serial<T>(task: () => Promise<T>): Promise<T> {
     const next = this.queue.then(task);
@@ -140,6 +159,8 @@ export class CallService {
 
       if (action.type === 'start') {
         this.emit(env, next, 'call_invite', { users: access.users });
+        const callerName = access.users.find((user) => Number(user.id) === Number(next.callerId))?.name;
+        this.notifyCall(env, next, callerName);
       } else if (action.type === 'accept' || action.type === 'restart') {
         if (next !== previous) this.emit(env, next, 'call_negotiate');
       } else if (action.type !== 'heartbeat') {

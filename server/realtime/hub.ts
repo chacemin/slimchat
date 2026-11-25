@@ -151,6 +151,13 @@ export class RealtimeHub {
     }
   }
 
+  isUserOnline(userId: number) {
+    for (const ws of this.all) {
+      if (ws.data.userId === Number(userId) && ws.readyState === 1) return true;
+    }
+    return false;
+  }
+
   stats() {
     return {
       rooms: this.rooms.size,

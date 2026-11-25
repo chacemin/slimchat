@@ -1,15 +1,19 @@
 # syntax=docker/dockerfile:1
 
+# Overridable so builds work both inside and outside mainland China.
+ARG BUN_IMAGE=oven/bun
 ARG BUN_VERSION=1.4.5
+ARG NPM_REGISTRY=https://registry.npmjs.org
 
-FROM oven/bun:${BUN_VERSION} AS build
+FROM ${BUN_IMAGE}:${BUN_VERSION} AS build
+ARG NPM_REGISTRY
 WORKDIR /app
 COPY package.json bun.lock bunfig.toml ./
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile --registry="${NPM_REGISTRY}"
 COPY . .
 RUN bun run build
 
-FROM oven/bun:${BUN_VERSION} AS runtime
+FROM ${BUN_IMAGE}:${BUN_VERSION} AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     SLIMCHAT_HOST=0.0.0.0 \

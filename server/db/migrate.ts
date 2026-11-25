@@ -13,7 +13,8 @@ export const REQUIRED_TABLES = [
   'schema_migrations',
   'uploaded_files',
   'message_events',
-  'realtime_tickets'
+  'realtime_tickets',
+  'user_feishu_webhooks'
 ];
 
 

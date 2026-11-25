@@ -3,6 +3,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # 国内默认源；海外或自建镜像源可在 .env 覆盖。
+        BUN_IMAGE: ${BUN_IMAGE:-docker.m.daocloud.io/oven/bun}
+        BUN_VERSION: ${BUN_VERSION:-1.4.5}
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
     image: slimchat:0.1.0
     container_name: slimchat
     restart: unless-stopped
@@ -17,7 +22,7 @@ services:
       SLIMCHAT_ADMIN_PASSWORD: ${SLIMCHAT_ADMIN_PASSWORD:-}
       SLIMCHAT_ADMIN_DISPLAY_NAME: ${SLIMCHAT_ADMIN_DISPLAY_NAME:-管理员}
     ports:
-      - "${SLIMCHAT_PUBLISH_ADDRESS:-127.0.0.1}:${SLIMCHAT_PUBLISH_PORT:-8787}:8787"
+      - "${SLIMCHAT_PUBLISH_ADDRESS:-0.0.0.0}:${SLIMCHAT_PUBLISH_PORT:-8787}:8787"
     volumes:
       - slimchat-data:/app/data
     healthcheck:

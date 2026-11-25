@@ -124,6 +124,23 @@ export default {
       body: payload
     });
   },
+  feishuWebhook() {
+    return request('/me/feishu-webhook');
+  },
+  saveFeishuWebhook(payload) {
+    return request('/me/feishu-webhook', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload
+    });
+  },
+  testFeishuWebhook(payload = {}) {
+    return request('/me/feishu-webhook/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload
+    });
+  },
   getUsers() {
     return request('/users');
   },
